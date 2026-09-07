@@ -3,7 +3,7 @@
 import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ChevronDown, Search, ShoppingBag } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -68,7 +68,7 @@ export function InsetNavbar({
               >
                 {link.label}
                 {current === link.label && (
-                  <span className="absolute -bottom-1 left-0 right-0 h-[2px] rounded-full bg-foreground" />
+                  <span className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-foreground" />
                 )}
               </button>
             ))}
@@ -91,18 +91,6 @@ export function InsetNavbar({
 
         {/* Right: Actions & Avatar */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Search"
-          >
-            <Search className="size-4" />
-          </button>
-          <button
-            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            aria-label="Cart"
-          >
-            <ShoppingBag className="size-4" />
-          </button>
           <Avatar className="size-7 sm:size-8 border border-border">
             <AvatarImage src="pfp.svg" />
             <AvatarFallback className="text-[11px]">UR</AvatarFallback>
