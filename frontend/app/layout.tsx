@@ -9,8 +9,8 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={cn("font-sans", inter.variable, instrumentSansHeading.variable)}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="es" className={cn("dark font-sans", inter.variable, instrumentSansHeading.variable)}>
+      <body className="min-h-screen bg-background text-foreground antialiased">{children}</body>
     </html>
   );
 }
