@@ -2,8 +2,8 @@ import Link from "next/link"
 import Image from "next/image"
 import { Send } from "lucide-react"
 import { SiInstagram, SiX, SiYoutube } from "react-icons/si"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/shadcn/button"
+import { Input } from "@/components/ui/shadcn/input"
 
 const MENU_LINKS = [
   { label: "Sobre", href: "/sobre" },

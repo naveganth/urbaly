@@ -8,7 +8,7 @@ import { useTheme } from "next-themes"
 import { ChevronDown, LogOut, Menu, Moon, Settings, Sun, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toggleThemeWithTransition } from "@/lib/theme-transition"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/shadcn/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,14 +17,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/shadcn/dropdown-menu"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet"
+} from "@/components/ui/shadcn/sheet"
 
 const NAV_LINKS = [
   { label: "Início", href: "/" },

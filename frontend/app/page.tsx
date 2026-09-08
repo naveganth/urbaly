@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { Maximize2, MapPinned, X } from "lucide-react"
 import * as React from "react"
 import { PageShell } from "@/components/page-shell"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/shadcn/button"
 
 export default function Home() {
   const [isMapOpen, setIsMapOpen] = React.useState(false)
