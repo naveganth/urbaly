@@ -21,5 +21,8 @@
   },
   "menuColor": "default-translucent",
   "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@acme": "https://acme.com/r/{name}.json",
+    "@smoothui": "https://smoothui.dev/r/{name}.json"
+  }
 }
