@@ -56,7 +56,7 @@ export function Navbar({
     activeTab ? activeTab === label : pathname === href
 
   return (
-    <header className={cn("w-full bg-background", className)}>
+    <header className={cn("w-full bg-background border-b border-border", className)}>
       <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6 sm:gap-8">
           <Link href="/" className="flex items-center">
