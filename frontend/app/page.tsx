@@ -1,14 +1,15 @@
-import { InsetLayout } from "@/components/inset-layout"
+import { Navbar } from "@/components/navbar"
 
 export default function Home() {
   return (
-    <InsetLayout>
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">Início</h1>
-        <p className="text-muted-foreground">
-          Urbaly
-        </p>
-      </div>
-    </InsetLayout>
+    <div className="min-h-screen w-full bg-background">
+      <Navbar />
+      <main className="page-transition w-full px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Início</h1>
+          <p className="text-muted-foreground">Urbaly</p>
+        </div>
+      </main>
+    </div>
   )
 }

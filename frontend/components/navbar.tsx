@@ -21,23 +21,23 @@ import {
 
 const NAV_LINKS = [
   { label: "Início", href: "/" },
-  { label: "Mapa", href: "/map" },
-  { label: "Classificações", href: "/classificacoes" },
+  { label: "Mapa", href: "/mapa" },
+  { label: "Classificação", href: "/classificacao" },
   { label: "Estatísticas", href: "/estatisticas" },
   { label: "Sobre", href: "/sobre" },
 ]
 
-export interface InsetNavbarProps {
+export interface NavbarProps {
   activeTab?: string
   onSelectTab?: (tab: string) => void
   className?: string
 }
 
-export function InsetNavbar({
+export function Navbar({
   activeTab,
   onSelectTab,
   className,
-}: InsetNavbarProps) {
+}: NavbarProps) {
   const pathname = usePathname()
   const { resolvedTheme, setTheme } = useTheme()
 
