@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
-import { ChevronDown, LogOut, Moon, Settings, Sun, User } from "lucide-react"
+import { ChevronDown, LogOut, Menu, Moon, Settings, Sun, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toggleThemeWithTransition } from "@/lib/theme-transition"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -18,6 +18,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 
 const NAV_LINKS = [
   { label: "Início", href: "/" },
@@ -45,10 +52,12 @@ export function Navbar({
     toggleThemeWithTransition(resolvedTheme, setTheme)
   }
 
+  const isLinkActive = (href: string, label: string) =>
+    activeTab ? activeTab === label : pathname === href
+
   return (
     <header className={cn("w-full bg-background", className)}>
       <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Left: Brand Logo & Links */}
         <div className="flex items-center gap-6 sm:gap-8">
           <Link href="/" className="flex items-center">
             <Image
@@ -61,11 +70,9 @@ export function Navbar({
             />
           </Link>
 
-          <nav className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm font-medium">
+          <nav className="hidden items-center gap-4 text-xs font-medium sm:flex sm:gap-6 sm:text-sm">
             {NAV_LINKS.map((link) => {
-              const isActive = activeTab
-                ? activeTab === link.label
-                : pathname === link.href
+              const isActive = isLinkActive(link.href, link.label)
 
               return (
                 <Link
@@ -85,7 +92,6 @@ export function Navbar({
               )
             })}
 
-            {/* Categories Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors outline-none cursor-pointer">
                 <span>Categorias</span>
@@ -109,8 +115,43 @@ export function Navbar({
           </nav>
         </div>
 
-        {/* Right: Actions & Avatar */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <Sheet>
+            <SheetTrigger
+              aria-label="Abrir menu de navegação"
+              className="inline-flex size-8 items-center justify-center rounded-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+            >
+              <Menu className="size-4" />
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[min(18rem,85vw)]">
+              <SheetHeader>
+                <SheetTitle>Navegação</SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col px-4" aria-label="Menu móvel">
+                {NAV_LINKS.map((link) => {
+                  const isActive = isLinkActive(link.href, link.label)
+
+                  return (
+                    <Link
+                      key={link.label}
+                      href={link.href}
+                      onClick={() => onSelectTab?.(link.label)}
+                      data-active={isActive}
+                      className={cn(
+                        "border-b border-border py-3 text-sm transition-colors data-[active=true]:font-semibold data-[active=true]:text-foreground",
+                        isActive
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {link.label}
+                    </Link>
+                  )
+                })}
+              </nav>
+            </SheetContent>
+          </Sheet>
+
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Abrir menu do usuário"
