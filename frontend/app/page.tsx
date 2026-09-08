@@ -5,6 +5,7 @@ import { Maximize2, MapPinned, X } from "lucide-react"
 import * as React from "react"
 import { PageShell } from "@/components/page-shell"
 import { Button } from "@/components/ui/shadcn/button"
+import FaqSearchable from "@/components/ui/smoothui/faq-3"
 
 export default function Home() {
   const [isMapOpen, setIsMapOpen] = React.useState(false)
@@ -82,6 +83,34 @@ export default function Home() {
             </Button>
           </motion.section>
         </AnimatePresence>
+
+        <FaqSearchable
+          title="Perguntas frequentes"
+          description="Tudo o que você precisa saber sobre a plataforma, o mapa e a atualização de informações no Amapá."
+          searchPlaceholder="Buscar perguntas..."
+          faqs={[
+            {
+              question: "Como funciona o mapa de ocorrências?",
+              answer:
+                "O mapa centraliza informações geográficas para facilitar a visualização de ocorrências e dados relevantes do território amapaense. A ideia é reunir informações em um único painel para ajudar a entender padrões locais e acompanhar mudanças em tempo real.",
+            },
+            {
+              question: "As informações são atualizadas em tempo real?",
+              answer:
+                "A plataforma foi pensada para acompanhar o estado atual das ocorrências e disponibilizar atualizações constantes. O objetivo é manter o usuário informado sobre o que está acontecendo na cidade com maior praticidade e agilidade.",
+            },
+            {
+              question: "A ferramenta é útil para quem quer acompanhar a cidade?",
+              answer:
+                "Sim. A proposta é servir tanto para moradores quanto para gestores, pesquisadores e estudantes que desejam acompanhar eventos, indicadores e ocorrências em diferentes regiões do Amapá com uma visão mais clara e objetiva.",
+            },
+            {
+              question: "Posso usar a plataforma para consultar dados por região?",
+              answer:
+                "Sim. O painel foi estruturado para permitir uma leitura mais simples por localização, ajudando a comparar áreas e identificar tendências, gargalos ou pontos que demandam maior atenção.",
+            },
+          ]}
+        />
       </div>
     </PageShell>
   )
