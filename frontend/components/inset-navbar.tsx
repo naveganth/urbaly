@@ -3,6 +3,7 @@
 import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -14,10 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 const NAV_LINKS = [
-  { label: "Mapa", href: "#mapa" },
-  { label: "Classificações", href: "#classificacoes" },
-  { label: "Estatísticas", href: "#estatisticas" },
-  { label: "Sobre", href: "#sobre" },
+  { label: "Início", href: "/" },
+  { label: "Mapa", href: "/map" },
+  { label: "Classificações", href: "/classificacoes" },
+  { label: "Estatísticas", href: "/estatisticas" },
+  { label: "Sobre", href: "/sobre" },
 ]
 
 export interface InsetNavbarProps {
@@ -27,16 +29,11 @@ export interface InsetNavbarProps {
 }
 
 export function InsetNavbar({
-  activeTab = "Mapa",
+  activeTab,
   onSelectTab,
   className,
 }: InsetNavbarProps) {
-  const [current, setCurrent] = React.useState(activeTab)
-
-  const handleTabClick = (label: string) => {
-    setCurrent(label)
-    if (onSelectTab) onSelectTab(label)
-  }
+  const pathname = usePathname()
 
   return (
     <header className={cn("w-full bg-background", className)}>
@@ -55,23 +52,30 @@ export function InsetNavbar({
           </Link>
 
           <nav className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm font-medium">
-            {NAV_LINKS.map((link) => (
-              <button
-                key={link.label}
-                onClick={() => handleTabClick(link.label)}
-                className={cn(
-                  "relative py-1 transition-colors outline-none cursor-pointer",
-                  current === link.label
-                    ? "text-foreground font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {link.label}
-                {current === link.label && (
-                  <span className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-foreground" />
-                )}
-              </button>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const isActive = activeTab
+                ? activeTab === link.label
+                : pathname === link.href
+
+              return (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  onClick={() => onSelectTab?.(link.label)}
+                  className={cn(
+                    "relative py-1 transition-colors outline-none cursor-pointer",
+                    isActive
+                      ? "text-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {link.label}
+                  {isActive && (
+                    <span className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-foreground" />
+                  )}
+                </Link>
+              )
+            })}
 
             {/* Categories Dropdown */}
             <DropdownMenu>
@@ -80,10 +84,18 @@ export function InsetNavbar({
                 <ChevronDown className="size-3.5 opacity-70" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-44 p-1">
-                <DropdownMenuItem className="cursor-pointer">Mobilidade</DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">Meio Ambiente</DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">Segurança</DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">Infraestrutura</DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/categorias/mobilidade" />}>
+                  Mobilidade
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/categorias/meio-ambiente" />}>
+                  Meio Ambiente
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/categorias/seguranca" />}>
+                  Segurança
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/categorias/infraestrutura" />}>
+                  Infraestrutura
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
@@ -92,7 +104,7 @@ export function InsetNavbar({
         {/* Right: Actions & Avatar */}
         <div className="flex items-center gap-2 sm:gap-3">
           <Avatar className="size-7 sm:size-8 border border-border">
-            <AvatarImage src="pfp.svg" />
+            <AvatarImage src="/pfp.svg" />
             <AvatarFallback className="text-[11px]">UR</AvatarFallback>
           </Avatar>
         </div>
