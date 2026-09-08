@@ -6,7 +6,7 @@ export default function Home() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold tracking-tight">Início</h1>
         <p className="text-muted-foreground">
-          Bem-vindo ao Urbaly. Selecione uma aba ou navegue pelo mapa.
+          Urbaly
         </p>
       </div>
     </InsetLayout>
