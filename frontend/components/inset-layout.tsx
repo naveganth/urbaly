@@ -25,7 +25,7 @@ export function InsetLayout({
       <main className="flex-1 w-full px-3 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6 flex flex-col">
         <div
           className={cn(
-            "flex-1 w-full rounded-xl sm:rounded-2xl border border-border bg-card text-card-foreground shadow-xs p-6 sm:p-8 md:p-10 transition-colors",
+            "page-transition flex-1 w-full rounded-xl sm:rounded-2xl border border-border bg-card text-card-foreground shadow-xs p-6 sm:p-8 md:p-10 transition-colors",
             contentClassName
           )}
         >

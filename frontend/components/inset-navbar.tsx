@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
 import { ChevronDown, LogOut, Moon, Settings, Sun, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toggleThemeWithTransition } from "@/lib/theme-transition"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -41,7 +42,7 @@ export function InsetNavbar({
   const { resolvedTheme, setTheme } = useTheme()
 
   const toggleTheme = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark")
+    toggleThemeWithTransition(resolvedTheme, setTheme)
   }
 
   return (
@@ -71,17 +72,15 @@ export function InsetNavbar({
                   key={link.label}
                   href={link.href}
                   onClick={() => onSelectTab?.(link.label)}
+                  data-active={isActive}
                   className={cn(
-                    "relative py-1 transition-colors outline-none cursor-pointer",
+                    "relative py-1 outline-none cursor-pointer transition-colors duration-200 ease-out after:absolute after:-bottom-1 after:left-0 after:right-0 after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-foreground after:opacity-0 after:transition-[transform,opacity] after:duration-300 after:ease-out data-[active=true]:after:scale-x-100 data-[active=true]:after:opacity-100",
                     isActive
                       ? "text-foreground font-semibold"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {link.label}
-                  {isActive && (
-                    <span className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-foreground" />
-                  )}
                 </Link>
               )
             })}
