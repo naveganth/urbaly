@@ -4,13 +4,17 @@ import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown } from "lucide-react"
+import { useTheme } from "next-themes"
+import { ChevronDown, LogOut, Moon, Settings, Sun, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -34,6 +38,11 @@ export function InsetNavbar({
   className,
 }: InsetNavbarProps) {
   const pathname = usePathname()
+  const { resolvedTheme, setTheme } = useTheme()
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark")
+  }
 
   return (
     <header className={cn("w-full bg-background", className)}>
@@ -103,10 +112,42 @@ export function InsetNavbar({
 
         {/* Right: Actions & Avatar */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <Avatar className="size-7 sm:size-8 border border-border">
-            <AvatarImage src="/pfp.svg" />
-            <AvatarFallback className="text-[11px]">UR</AvatarFallback>
-          </Avatar>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Abrir menu do usuário"
+              className="rounded-full outline-none ring-offset-background transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Avatar className="size-7 border border-border sm:size-8">
+                <AvatarImage src="/pfp.svg" />
+                <AvatarFallback className="text-[11px]">UR</AvatarFallback>
+              </Avatar>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 p-1">
+              <DropdownMenuLabel className="px-2 py-2">
+                Minha conta
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem render={<Link href="/perfil" />}>
+                  <User />
+                  Meu perfil
+                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/configuracoes" />}>
+                  <Settings />
+                  Configurações
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={toggleTheme}>
+                  {resolvedTheme === "dark" ? <Sun /> : <Moon />}
+                  {resolvedTheme === "dark" ? "Modo claro" : "Modo escuro"}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <LogOut />
+                Sair da conta
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
