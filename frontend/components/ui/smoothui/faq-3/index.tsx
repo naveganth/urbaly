@@ -189,7 +189,7 @@ export function FaqSearchable({
                         animate={{
                           rotate: isOpen ? 180 : 0,
                         }}
-                        className='flex-shrink-0'
+                        className='shrink-0'
                         transition={springTransition}
                       >
                         <ChevronDown
