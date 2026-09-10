@@ -102,12 +102,14 @@ interface CreateGooglePinElementOptions {
   category: ReportCategory;
   isDark: boolean;
   delayMs: number;
+  animateIn?: boolean;
 }
 
 export function createGooglePinElement({
   category,
   isDark,
   delayMs,
+  animateIn = true,
 }: CreateGooglePinElementOptions): HTMLDivElement {
   const colorScheme = CATEGORY_PIN_COLORS[category] || CATEGORY_PIN_COLORS.other;
   const pinColor = isDark ? colorScheme.darkPrimary : colorScheme.primary;
@@ -120,9 +122,14 @@ export function createGooglePinElement({
   container.style.width = '34px';
   container.style.height = '48px';
 
+  const pinClassName = animateIn ? 'animate-google-pin group' : 'group';
+  const pinOpacity = animateIn ? '0' : '1';
+  const shadowClassName = animateIn ? 'animate-google-shadow' : '';
+  const shadowOpacity = animateIn ? '0' : '1';
+
   container.innerHTML = `
     <div
-      class="animate-google-pin group"
+      class="${pinClassName}"
       style="
         animation-delay: ${delayMs}ms;
         transform-origin: bottom center;
@@ -130,6 +137,7 @@ export function createGooglePinElement({
         width: 34px;
         height: 44px;
         transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        opacity: ${pinOpacity};
       "
     >
       <!-- Teardrop Pin SVG -->
@@ -185,7 +193,7 @@ export function createGooglePinElement({
 
     <!-- Ground Drop Shadow -->
     <div
-      class="animate-google-shadow"
+      class="${shadowClassName}"
       style="
         width: 18px;
         height: 6px;
@@ -193,6 +201,7 @@ export function createGooglePinElement({
         background: radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 75%);
         margin-top: -2px;
         animation-delay: ${delayMs}ms;
+        opacity: ${shadowOpacity};
       "
     ></div>
   `;

@@ -53,14 +53,14 @@ const CATEGORY_HEX_COLORS: Record<ReportCategory, { light: string; dark: string 
 
 function getMapTiles(isDark: boolean) {
   const mapApiKey = process.env.NEXT_PUBLIC_MAP_API_KEY?.trim();
+  const themeVariant = isDark ? 'dark_all' : 'light_all';
+  const tileUrl = `https://a.basemaps.cartocdn.com/${themeVariant}/{z}/{x}/{y}@2x.png`;
 
   if (mapApiKey) {
-    return `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${mapApiKey}`;
+    return `${tileUrl}?key=${mapApiKey}`;
   }
 
-  return isDark
-    ? 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
-    : 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
+  return tileUrl;
 }
 
 export default function Map() {
@@ -72,6 +72,7 @@ export default function Map() {
   const mapRef = React.useRef<maplibregl.Map | null>(null);
   const markersRef = React.useRef<maplibregl.Marker[]>([]);
   const placementMarkerRef = React.useRef<maplibregl.Marker | null>(null);
+  const previousFilteredIdsRef = React.useRef<string[]>([]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   React.useEffect(() => {
@@ -234,7 +235,13 @@ export default function Map() {
   // Update MapLibre markers when filteredReports or isDark change with sequential Google Maps pin drop
   React.useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !hasMounted) return;
+
+    const nextFilteredIds = filteredReports.map((report) => report.id);
+    const hasFilteredListChanged =
+      previousFilteredIdsRef.current.length === 0 ||
+      previousFilteredIdsRef.current.length !== nextFilteredIds.length ||
+      previousFilteredIdsRef.current.some((id, index) => id !== nextFilteredIds[index]);
 
     // Clear existing markers
     markersRef.current.forEach((m) => m.remove());
@@ -242,13 +249,14 @@ export default function Map() {
 
     // Add markers for filtered reports one-by-one with Google Maps pin drop animation
     filteredReports.forEach((report, index) => {
-      // Staggered delay so pins drop one by one onto the map
-      const delayMs = index * 120;
+      const delayMs = hasFilteredListChanged ? index * 120 : 0;
+      const animateIn = hasFilteredListChanged;
 
       const el = createGooglePinElement({
         category: report.category,
         isDark,
         delayMs,
+        animateIn,
       });
 
       el.addEventListener('click', (e) => {
@@ -266,7 +274,9 @@ export default function Map() {
 
       markersRef.current.push(marker);
     });
-  }, [filteredReports, isDark]);
+
+    previousFilteredIdsRef.current = nextFilteredIds;
+  }, [filteredReports, isDark, hasMounted]);
 
   // Handle map click for point placement mode
   React.useEffect(() => {

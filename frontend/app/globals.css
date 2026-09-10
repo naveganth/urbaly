@@ -53,6 +53,49 @@
   }
 }
 
+@keyframes map-pin-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.82);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(3px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes map-pin-shadow {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-google-pin {
+  animation: map-pin-drop 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-google-shadow {
+  animation: map-pin-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-google-pin,
+  .animate-google-shadow {
+    animation-duration: 1ms;
+  }
+}
+
 :root {
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
