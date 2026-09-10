@@ -1,0 +1,147 @@
+import { StreetReport } from '@/components/map/types';
+
+export const INITIAL_REPORTS: StreetReport[] = [
+  {
+    id: 'rep-001',
+    title: 'Cratera profunda no cruzamento da Av. FAB',
+    description:
+      'Buraco de grande proporção no asfalto que está obrigando veículos a invadirem a faixa contrária. Risco grave de acidentes e danos à suspensão dos carros.',
+    category: 'pothole',
+    urgency: 'critical',
+    rating: 5,
+    coordinates: [-51.0628, 0.0384],
+    address: 'Av. FAB, esquina com Rua General Rondon',
+    neighborhood: 'Centro',
+    referencePoint: 'Em frente ao Palácio do Setentrião',
+    images: [
+      'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1578885136359-16c8bd4d3a8e?auto=format&fit=crop&w=1200&q=80',
+    ],
+    imageUrl:
+      'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=1200&q=80',
+    createdAt: '2026-09-08T10:30:00Z',
+    status: 'investigating',
+    upvotes: 24,
+    reportedBy: 'Carlos Menezes',
+    isAnonymous: false,
+  },
+  {
+    id: 'rep-002',
+    title: 'Poste com lâmpada queimada há 3 semanas',
+    description:
+      'Trecho da rua completamente às escuras durante a noite. Moradores e estudantes relatam sensação de insegurança e assaltos recentes.',
+    category: 'lighting',
+    urgency: 'high',
+    rating: 4,
+    coordinates: [-51.0545, 0.0319],
+    address: 'Rua Cândido Mendes, altura do nº 1420',
+    neighborhood: 'Centro',
+    referencePoint: 'Próximo à Fortaleza de São José',
+    images: [
+      'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c?auto=format&fit=crop&w=1200&q=80',
+    ],
+    imageUrl:
+      'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=1200&q=80',
+    createdAt: '2026-09-07T19:15:00Z',
+    status: 'open',
+    upvotes: 18,
+    reportedBy: 'Mariana Duarte',
+    isAnonymous: false,
+  },
+  {
+    id: 'rep-003',
+    title: 'Bueiro entupido causando alagamento na pista',
+    description:
+      'Acúmulo de lixo e terra tampou a galeria de águas pluviais. Qualquer chuva rápida causa poça imensa cobrindo calçadas e dificultando travessia.',
+    category: 'drainage',
+    urgency: 'high',
+    rating: 4,
+    coordinates: [-51.0692, 0.0247],
+    address: 'Av. Feliciano Coelho, 890',
+    neighborhood: 'Trem',
+    referencePoint: 'Perto da Praça da Conceição',
+    images: [
+      'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?auto=format&fit=crop&w=1200&q=80',
+    ],
+    imageUrl:
+      'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=1200&q=80',
+    createdAt: '2026-09-06T14:00:00Z',
+    status: 'open',
+    upvotes: 15,
+    reportedBy: 'Anônimo',
+    isAnonymous: true,
+  },
+  {
+    id: 'rep-004',
+    title: 'Descarte clandestino de entulho e lixo',
+    description:
+      'Restos de construção civil e lixo orgânico jogados na calçada. Mau cheiro, proliferação de insetos e obstrução da passagem de pedestres.',
+    category: 'waste',
+    urgency: 'medium',
+    rating: 3,
+    coordinates: [-51.0784, 0.0162],
+    address: 'Rua Santos Dumont, próximo ao cruzamento',
+    neighborhood: 'Santa Rita',
+    referencePoint: 'Ao lado do terreno baldio cercado',
+    images: [
+      'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=1200&q=80',
+    ],
+    imageUrl:
+      'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?auto=format&fit=crop&w=1200&q=80',
+    createdAt: '2026-09-05T08:45:00Z',
+    status: 'investigating',
+    upvotes: 9,
+    reportedBy: 'Roberto Silva',
+    isAnonymous: false,
+  },
+  {
+    id: 'rep-005',
+    title: 'Semáforo desligado em cruzamento movimentado',
+    description:
+      'Semáforo apagado intermitentemente causando congestionamento e risco constante de colisão entre pedestres e veículos velozes.',
+    category: 'signage',
+    urgency: 'critical',
+    rating: 5,
+    coordinates: [-51.0825, 0.0018],
+    address: 'Rodovia JK, km 2',
+    neighborhood: 'Jardim Marco Zero',
+    referencePoint: 'Em frente ao Monumento Marco Zero do Equador',
+    images: [
+      'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?auto=format&fit=crop&w=1200&q=80',
+    ],
+    imageUrl:
+      'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=1200&q=80',
+    createdAt: '2026-09-08T16:20:00Z',
+    status: 'open',
+    upvotes: 32,
+    reportedBy: 'Fernanda Leal',
+    isAnonymous: false,
+  },
+  {
+    id: 'rep-006',
+    title: 'Calçada intransitável com piso tátil destruído',
+    description:
+      'Buracos na calçada pública e degraus irregulares impedem o trânsito de cadeirantes e pessoas com deficiência visual.',
+    category: 'accessibility',
+    urgency: 'medium',
+    rating: 3,
+    coordinates: [-51.0741, 0.0115],
+    address: 'Av. Padre Júlio Maria Lombaerd, 1600',
+    neighborhood: 'Beirol',
+    referencePoint: 'Próximo à feira do Beirol',
+    images: [
+      'https://images.unsplash.com/photo-1584467735815-f778f274e296?auto=format&fit=crop&w=1200&q=80',
+    ],
+    imageUrl:
+      'https://images.unsplash.com/photo-1584467735815-f778f274e296?auto=format&fit=crop&w=1200&q=80',
+    createdAt: '2026-09-04T11:10:00Z',
+    status: 'resolved',
+    upvotes: 11,
+    reportedBy: 'Lucas Picanço',
+    isAnonymous: false,
+  },
+];
