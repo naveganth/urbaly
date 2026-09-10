@@ -52,10 +52,10 @@ const CATEGORY_HEX_COLORS: Record<ReportCategory, { light: string; dark: string 
 };
 
 function getMapTiles(isDark: boolean) {
-  const customTiles = process.env.NEXT_PUBLIC_MAP_API_KEY || process.env.MAP_API_KEY;
+  const mapApiKey = process.env.NEXT_PUBLIC_MAP_API_KEY?.trim();
 
-  if (customTiles) {
-    return customTiles;
+  if (mapApiKey) {
+    return `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${mapApiKey}`;
   }
 
   return isDark
