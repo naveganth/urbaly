@@ -3,19 +3,17 @@
 import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { ChevronDown, LogOut, Menu, Moon, Settings, Sun, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toggleThemeWithTransition } from "@/lib/theme-transition"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/shadcn/avatar"
+import SmoothDropdownMenu from "@/components/ui/smoothui"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/shadcn/dropdown-menu"
 import {
@@ -51,6 +49,7 @@ export function Navbar({
   const toggleTheme = () => {
     toggleThemeWithTransition(resolvedTheme, setTheme)
   }
+  const router = useRouter()
 
   const isLinkActive = (href: string, label: string) =>
     activeTab ? activeTab === label : pathname === href
@@ -152,42 +151,55 @@ export function Navbar({
             </SheetContent>
           </Sheet>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label="Abrir menu do usuário"
-              className="rounded-full outline-none ring-offset-background transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
+          <SmoothDropdownMenu
+            align="end"
+            className="w-52 p-1"
+            items={[
+              {
+                key: "account-label",
+                label: "",
+                groupLabel: "Minha conta",
+              },
+              {
+                key: "profile",
+                label: "Meu perfil",
+                icon: <User />,
+                onSelect: () => router.push("/perfil"),
+              },
+              {
+                key: "settings",
+                label: "Configurações",
+                icon: <Settings />,
+                onSelect: () => router.push("/configuracoes"),
+              },
+              {
+                key: "theme",
+                label: resolvedTheme === "dark" ? "Modo claro" : "Modo escuro",
+                icon: resolvedTheme === "dark" ? <Sun /> : <Moon />,
+                onSelect: toggleTheme,
+              },
+              {
+                key: "account-separator",
+                label: "",
+                separator: true,
+              },
+              {
+                key: "logout",
+                label: "Sair da conta",
+                icon: <LogOut />,
+              },
+            ]}
+            triggerProps={{
+              "aria-label": "Abrir menu do usuário",
+              className:
+                "rounded-full outline-none ring-offset-background transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            }}
+          >
               <Avatar className="size-7 border border-border sm:size-8">
                 <AvatarImage src="/pfp.svg" />
                 <AvatarFallback className="text-[11px]">UR</AvatarFallback>
               </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 p-1">
-              <DropdownMenuLabel className="px-2 py-2">
-                Minha conta
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem render={<Link href="/perfil" />}>
-                  <User />
-                  Meu perfil
-                </DropdownMenuItem>
-                <DropdownMenuItem render={<Link href="/configuracoes" />}>
-                  <Settings />
-                  Configurações
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={toggleTheme}>
-                  {resolvedTheme === "dark" ? <Sun /> : <Moon />}
-                  {resolvedTheme === "dark" ? "Modo claro" : "Modo escuro"}
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <LogOut />
-                Sair da conta
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          </SmoothDropdownMenu>
         </div>
       </div>
     </header>

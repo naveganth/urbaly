@@ -7,8 +7,6 @@ import { useTheme } from 'next-themes';
 import {
   Plus,
   Search,
-  MapPin,
-  Compass,
   AlertCircle,
   X,
   Crosshair,
@@ -200,6 +198,17 @@ export default function Map() {
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true,
+        },
+        trackUserLocation: false,
+        showUserLocation: true,
+        showAccuracyCircle: true,
+      }),
+      'top-right'
+    );
 
     return () => {
       map.remove();
@@ -394,33 +403,6 @@ export default function Map() {
     }
   };
 
-  // User Geolocation
-  const handleGeolocate = () => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords: [number, number] = [pos.coords.longitude, pos.coords.latitude];
-          if (mapRef.current) {
-            mapRef.current.flyTo({
-              center: coords,
-              zoom: 15,
-              duration: 1500,
-            });
-          }
-        },
-        (err) => {
-          console.warn('Geolocation denied or unavailable:', err);
-          if (mapRef.current) {
-            mapRef.current.flyTo({
-              center: [-51.065, 0.035],
-              zoom: 14,
-            });
-          }
-        }
-      );
-    }
-  };
-
   return (
     <div className="flex flex-col gap-3 w-full">
       {/* Top Floating Control Bar */}
@@ -480,20 +462,8 @@ export default function Map() {
           </DropdownMenu>
         </div>
 
-        {/* Primary Action Button: Add Report & GPS */}
+        {/* Primary Action Button */}
         <div className="flex items-center gap-2 shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleGeolocate}
-            title="Minha Localização Atual"
-            className="h-8 px-2.5"
-          >
-            <Compass className="size-4 text-primary" />
-            <span className="hidden sm:inline text-xs">GPS</span>
-          </Button>
-
           <Button
             type="button"
             size="sm"

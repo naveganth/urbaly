@@ -49,8 +49,6 @@ export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProp
           </div>
         ) : (
           <>
-            <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [background-size:3rem_3rem]" />
-
             <div className="relative flex flex-col items-center gap-3 text-center p-4">
               <div className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                 <MapPinned className="size-5" />
