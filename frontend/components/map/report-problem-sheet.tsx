@@ -5,7 +5,7 @@ import {
   Camera,
   X,
   Send,
-  AlertCircle,
+  CircleAlert,
   Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -154,7 +154,7 @@ export function ReportProblemSheet({
         side='right'
         showCloseButton={false}
         style={{ width: `${sheetWidth}px` }}
-        className='!max-w-none overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:translate-x-0 max-sm:border-0'
+        className='relative !max-w-none overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:translate-x-0 max-sm:border-0'
       >
         <div
           role='separator'
@@ -170,10 +170,10 @@ export function ReportProblemSheet({
         </div>
         <form onSubmit={handleSubmit} className='flex flex-col min-h-full'>
           {/* Sticky Header */}
-          <div className='sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-5 pr-14 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-14 lg:px-8 lg:pr-14'>
+          <div className='sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-5 pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
             <div className='flex min-w-0 items-center gap-3'>
               <span className='flex size-9 items-center justify-center bg-primary text-primary-foreground shrink-0'>
-                <AlertCircle className='size-5' />
+                <CircleAlert className='report-alert-icon size-5' aria-hidden='true' />
               </span>
               <div className='min-w-0'>
                 <SheetTitle className='truncate text-lg font-bold leading-[1.1] tracking-tight text-foreground text-balance sm:text-xl'>
@@ -198,10 +198,10 @@ export function ReportProblemSheet({
               variant='ghost'
               size='icon'
               onClick={handleClose}
-              className='absolute right-3 top-1/2 z-10 size-9 -translate-y-1/2 rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary sm:right-5'
-              aria-label='Fechar'
+              className='absolute right-4 top-4 z-10 size-11 rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
+              aria-label='Fechar formulário de reporte'
             >
-              <X className='size-4' />
+              <X className='size-4' aria-hidden='true' />
             </Button>
           </div>
 
@@ -209,7 +209,7 @@ export function ReportProblemSheet({
           <div className='mx-auto flex w-full max-w-2xl flex-1 flex-col gap-7 px-5 py-6 pb-32 sm:px-6 sm:py-5 lg:px-8'>
             {errorMessage && (
               <div aria-live='polite' className='flex items-center gap-2.5 border-l-2 border-destructive bg-destructive/10 p-3.5 text-xs text-destructive'>
-                <AlertCircle className='size-4 shrink-0' />
+                <CircleAlert className='size-4 shrink-0' aria-hidden='true' />
                 <span className='font-medium'>{errorMessage}</span>
               </div>
             )}

@@ -118,7 +118,7 @@ export function Navbar({
           <Sheet>
             <SheetTrigger
               aria-label="Abrir menu de navegação"
-              className="inline-flex size-8 items-center justify-center rounded-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+              className="inline-flex size-11 touch-manipulation items-center justify-center rounded-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
             >
               <Menu className="size-4" />
             </SheetTrigger>

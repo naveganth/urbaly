@@ -5,9 +5,10 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTheme } from 'next-themes';
 import {
-  Plus,
   Search,
   X,
+  Plus,
+  CircleAlert,
   Crosshair,
   SlidersHorizontal,
   Info,
@@ -67,6 +68,7 @@ export default function Map() {
 
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const mapRef = React.useRef<maplibregl.Map | null>(null);
+  const mapLoadedRef = React.useRef(false);
   const markersRef = React.useRef<maplibregl.Marker[]>([]);
   const placementMarkerRef = React.useRef<maplibregl.Marker | null>(null);
   const previousFilteredIdsRef = React.useRef<string[]>([]);
@@ -79,6 +81,8 @@ export default function Map() {
   // Reports state with LocalStorage persistence
   const [reports, setReports] = React.useState<StreetReport[]>(INITIAL_REPORTS);
   const [storageReady, setStorageReady] = React.useState(false);
+  const [storageError, setStorageError] = React.useState<string | null>(null);
+  const [isOffline, setIsOffline] = React.useState(false);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -94,6 +98,7 @@ export default function Map() {
       }
     } catch (e) {
       console.error('Error loading reports from localStorage:', e);
+      setStorageError('Não foi possível carregar os registros salvos neste dispositivo.');
     } finally {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStorageReady(true);
@@ -108,8 +113,21 @@ export default function Map() {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reports));
     } catch (e) {
       console.error('Error saving reports to localStorage:', e);
+      setStorageError('Não foi possível salvar alterações neste dispositivo.');
     }
   }, [reports, storageReady]);
+
+  React.useEffect(() => {
+    const updateOfflineState = () => setIsOffline(!navigator.onLine);
+    updateOfflineState();
+    window.addEventListener('online', updateOfflineState);
+    window.addEventListener('offline', updateOfflineState);
+
+    return () => {
+      window.removeEventListener('online', updateOfflineState);
+      window.removeEventListener('offline', updateOfflineState);
+    };
+  }, []);
 
   // Mode & selection state
   const [isPlacementMode, setIsPlacementMode] = React.useState(false);
@@ -117,6 +135,9 @@ export default function Map() {
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [selectedReport, setSelectedReport] = React.useState<StreetReport | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
+  const [isMapLoading, setIsMapLoading] = React.useState(true);
+  const [mapError, setMapError] = React.useState<string | null>(null);
+  const [mapRetryKey, setMapRetryKey] = React.useState(0);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -149,10 +170,16 @@ export default function Map() {
     return { total, open, investigating, resolved };
   }, [reports]);
 
+  const hasActiveFilters =
+    selectedCategory !== 'all' || selectedStatus !== 'all' || searchQuery.trim().length > 0;
+
   // Initialize Map
   React.useEffect(() => {
     if (!mapContainerRef.current) return;
 
+    mapLoadedRef.current = false;
+    setIsMapLoading(true);
+    setMapError(null);
     const initialTiles = getMapTiles(isDark);
 
     const map = new maplibregl.Map({
@@ -192,8 +219,17 @@ export default function Map() {
 
     mapRef.current = map;
 
+    map.on('load', () => {
+      mapLoadedRef.current = true;
+      setIsMapLoading(false);
+    });
+
     map.on('error', (event) => {
       console.error('MapLibre error:', event.error || 'Unknown map error');
+      if (!mapLoadedRef.current) {
+        setIsMapLoading(false);
+        setMapError('O mapa não pôde ser carregado. Verifique sua conexão e tente novamente.');
+      }
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -213,7 +249,7 @@ export default function Map() {
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [mapRetryKey]);
 
   // Update map tile theme on dark mode change
   React.useEffect(() => {
@@ -303,13 +339,13 @@ export default function Map() {
           const el = document.createElement('div');
           el.className = 'google-placement-marker select-none';
           el.innerHTML = `
-            <div class="relative flex flex-col items-center animate-bounce" style="width: 34px; height: 44px; filter: drop-shadow(0 6px 14px rgba(2, 132, 199, 0.45));">
+            <div class="map-placement-marker">
               <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M17 0C7.611 0 0 7.611 0 17C0 26.5 13.8 41.8 16.1 43.9C16.6 44.4 17.4 44.4 17.9 43.9C20.2 41.8 34 26.5 34 17C34 7.611 26.389 0 17 0Z" fill="#0284c7" />
                 <path d="M17 1.5C8.44 1.5 1.5 8.44 1.5 17C1.5 19.8 2.6 23 4.5 26.2C5.6 21 9.8 11.5 17 11.5C24.2 11.5 28.4 21 29.5 26.2C31.4 23 32.5 19.8 32.5 17C32.5 8.44 25.56 1.5 17 1.5Z" fill="white" fill-opacity="0.25" />
                 <circle cx="17" cy="16.5" r="9.5" fill="#ffffff" />
               </svg>
-              <div style="position: absolute; top: 6px; left: 6px; width: 22px; height: 21px; display: flex; align-items: center; justify-content: center; color: #0284c7;">
+              <div class="map-placement-icon">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 5v14M5 12h14"/>
                 </svg>
@@ -404,37 +440,37 @@ export default function Map() {
   };
 
   return (
-    <div className="flex flex-col gap-3 w-full">
+    <div className="flex w-full flex-col gap-4">
       {/* Top Floating Control Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 p-2 rounded-xl bg-card border border-border shadow-xs">
+      <div className="flex flex-col gap-3 rounded-md border border-border/70 bg-card/95 p-3 shadow-sm backdrop-blur-sm md:flex-row md:items-center md:justify-between">
         {/* Search & Status Filter */}
-        <div className="flex items-center gap-2 flex-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="relative min-w-0 flex-1 md:max-w-md">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por rua, bairro ou problema..."
-              className="pl-8 h-8 text-xs bg-background"
+              className="h-11 rounded-md border-border/70 bg-background/80 pl-9 text-sm shadow-none transition-[border-color,box-shadow] focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Limpar busca"
               >
-                <X className="size-3.5" />
+                <X className="size-4" />
               </button>
             )}
           </div>
 
           {/* Status Dropdown Filter */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex shrink-0 items-center justify-center border border-border bg-background hover:bg-muted hover:text-foreground h-8 gap-1.5 px-2.5 rounded-none text-xs font-medium cursor-pointer transition-colors focus-visible:ring-1 focus-visible:ring-ring outline-none">
-              <SlidersHorizontal className="size-3.5" />
+            <DropdownMenuTrigger className="hidden h-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-md border border-border/70 bg-background/80 px-3 text-xs font-medium outline-none transition-[background-color,border-color,color] hover:border-primary/40 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:inline-flex">
+              <SlidersHorizontal className="size-4" />
               <span className="hidden sm:inline">Status:</span>
-              <span className="font-semibold">
+              <span className="font-medium leading-tight">
                 {selectedStatus === 'all'
                   ? 'Todos'
                   : selectedStatus === 'open'
@@ -445,7 +481,7 @@ export default function Map() {
               </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-xs">
-              <DropdownMenuLabel>              Filtrar por status</DropdownMenuLabel>
+              <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
                 Todos os status
@@ -464,7 +500,32 @@ export default function Map() {
         </div>
 
         {/* Primary Action Button */}
-        <div className="flex w-full items-center gap-2 shrink-0 md:w-auto">
+        <div className="flex w-full shrink-0 items-center gap-2 md:w-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex h-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-md border border-border/70 bg-background/80 px-3 text-xs font-medium outline-none transition-[background-color,border-color,color] hover:border-primary/40 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:hidden">
+              <SlidersHorizontal className="size-4" />
+              Filtros
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-[min(28rem,70vh)] w-64 overflow-y-auto text-xs">
+              <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSelectedStatus('all')}>Todos os status</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedStatus('open')}>Em aberto</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>Em análise</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>Resolvidos</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Filtrar por categoria</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setSelectedCategory('all')}>
+                Todas as categorias ({reports.length})
+              </DropdownMenuItem>
+              {(Object.keys(CATEGORIES) as ReportCategory[]).map((catKey) => (
+                <DropdownMenuItem key={catKey} onClick={() => setSelectedCategory(catKey)}>
+                  <CategoryIcon category={catKey} className="size-3.5" />
+                  {CATEGORIES[catKey].label} ({reports.filter((r) => r.category === catKey).length})
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             type="button"
             size="sm"
@@ -475,10 +536,10 @@ export default function Map() {
               }
             }}
             className={cn(
-              'h-9 w-full min-w-0 gap-1.5 whitespace-nowrap px-3.5 text-xs font-semibold shadow-sm transition-[background-color,transform] duration-150 cursor-pointer active:scale-[0.98] md:w-auto',
+              'h-11 w-full min-w-0 cursor-pointer touch-manipulation gap-2 rounded-md px-4 text-sm font-semibold shadow-sm transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.98] md:w-auto',
               isPlacementMode
-                ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                ? 'bg-amber-500 text-white shadow-amber-500/20 hover:bg-amber-600'
+                : 'bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90'
             )}
           >
             {isPlacementMode ? (
@@ -488,7 +549,7 @@ export default function Map() {
               </>
             ) : (
               <>
-                <Plus className="size-4" />
+                <CircleAlert className="report-action-icon size-4" aria-hidden="true" />
                 Reportar Problema
               </>
             )}
@@ -496,13 +557,28 @@ export default function Map() {
         </div>
       </div>
 
+      {(isOffline || storageError) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-100"
+        >
+          <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            {isOffline
+              ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
+              : storageError}
+          </span>
+        </div>
+      )}
+
       {/* Category Filter Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+      <div className="relative hidden items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs md:flex">
         <button
           type="button"
           onClick={() => setSelectedCategory('all')}
           className={cn(
-            'px-2.5 py-1 rounded-full border font-medium whitespace-nowrap transition-all cursor-pointer',
+            'min-h-11 cursor-pointer touch-manipulation whitespace-nowrap rounded-md border px-3 py-1.5 font-medium transition-[background-color,border-color,color,box-shadow] duration-150',
             selectedCategory === 'all'
               ? 'bg-primary text-primary-foreground border-primary shadow-xs'
               : 'bg-card text-muted-foreground border-border hover:bg-muted'
@@ -522,7 +598,7 @@ export default function Map() {
               type="button"
               onClick={() => setSelectedCategory(catKey)}
               className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-full border whitespace-nowrap transition-all cursor-pointer font-medium',
+                'flex min-h-11 cursor-pointer touch-manipulation items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 font-medium transition-[background-color,border-color,color,box-shadow] duration-150',
                 isSelected
                   ? 'bg-foreground text-background border-foreground shadow-xs'
                   : 'bg-card text-muted-foreground border-border hover:bg-muted'
@@ -530,7 +606,7 @@ export default function Map() {
             >
               <CategoryIcon category={catKey} className="size-3" />
               <span>{cat.label}</span>
-              <span className="text-[10px] opacity-75 font-mono">({count})</span>
+              <span className="font-mono text-[10px] tabular-nums tracking-normal opacity-75">({count})</span>
             </button>
           );
         })}
@@ -540,54 +616,107 @@ export default function Map() {
       <div
         ref={mapContainerRef}
         className={cn(
-          'relative w-full h-[640px] rounded-2xl overflow-hidden border border-border shadow-md bg-muted transition-colors',
+          'relative h-[clamp(24rem,68dvh,40rem)] min-h-[24rem] w-full overflow-hidden rounded-md border border-border/70 bg-muted shadow-lg shadow-foreground/5 transition-[border-color,box-shadow] md:min-h-[30rem]',
           isPlacementMode && 'placement-mode-active'
         )}
       >
+        {isMapLoading && !mapError && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label="Carregando mapa"
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-muted"
+          >
+            <div className="h-10 w-10 animate-pulse rounded-md border border-border/70 bg-card shadow-sm" />
+            <span className="text-xs font-medium text-muted-foreground">Carregando mapa…</span>
+          </div>
+        )}
+
+        {mapError && (
+          <div
+            role="alert"
+            className="absolute inset-0 z-20 flex items-center justify-center bg-muted/95 px-6 text-center"
+          >
+            <div className="flex max-w-sm flex-col items-center gap-3 rounded-md border border-border bg-card px-5 py-4 shadow-lg">
+              <Info className="size-5 text-amber-500" />
+              <p className="text-sm font-medium text-foreground">{mapError}</p>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setMapRetryKey((value) => value + 1)}
+                className="h-10 rounded-md px-4"
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Placement Mode Top Overlay Banner */}
         {isPlacementMode && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2.5 px-4 py-2 rounded-full bg-background/95 dark:bg-zinc-900/95 backdrop-blur-md border border-primary/50 shadow-xl text-xs font-semibold text-foreground animate-in fade-in slide-in-from-top-3">
+          <div className="absolute left-3 right-3 top-3 z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-md border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 dark:bg-zinc-900/95">
             <span className="flex size-2 rounded-full bg-primary animate-ping" />
             <Crosshair className="size-4 text-primary" />
             <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
             <button
               type="button"
               onClick={handleCancelPlacement}
-              className="ml-2 text-muted-foreground hover:text-foreground cursor-pointer"
+              className="ml-1 size-11 shrink-0 cursor-pointer touch-manipulation rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Fechar aviso de marcação"
             >
-              <X className="size-3.5" />
+              <X className="mx-auto size-3.5" />
             </button>
           </div>
         )}
 
         {/* Bottom Legend / Stats Widget */}
-        <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-background/90 dark:bg-zinc-900/90 backdrop-blur-md border border-border/80 shadow-lg text-[11px]">
+        <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/80 bg-background/90 px-3.5 py-2 text-[11px] shadow-lg backdrop-blur-md sm:right-auto sm:flex-nowrap sm:py-1.5 dark:bg-zinc-900/90">
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="font-semibold text-foreground">{filteredReports.length}</span>
-            <span>resultados exibidos</span>
+            <span className="font-mono font-semibold tabular-nums text-foreground">{filteredReports.length}</span>
+            <span className="leading-tight">no mapa</span>
           </div>
           <span className="h-3 w-px bg-border" />
           <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
             <span className="size-2 rounded-full bg-amber-500" />
-            <span>{stats.open} abertos</span>
+            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.open}</span> abertos</span>
           </div>
           <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
             <span className="size-2 rounded-full bg-sky-500" />
-            <span>{stats.investigating} em análise</span>
+            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.investigating}</span> em análise</span>
           </div>
           <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
             <span className="size-2 rounded-full bg-emerald-500" />
-            <span>{stats.resolved} resolvidos</span>
+            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.resolved}</span> resolvidos</span>
           </div>
         </div>
 
         {/* Empty state hint */}
-        {filteredReports.length === 0 && (
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex justify-center pointer-events-none">
-            <div className="px-4 py-2 rounded-xl bg-background/90 dark:bg-zinc-900/90 backdrop-blur-md border border-border shadow-xl text-xs text-muted-foreground flex items-center gap-2">
+        {filteredReports.length === 0 && !isMapLoading && !mapError && (
+          <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
+            <div className="flex max-w-sm flex-col items-center gap-2 rounded-md border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
               <Info className="size-4 text-amber-500" />
-              Nenhum problema encontrado com estes filtros.
+              <span>
+                {hasActiveFilters
+                  ? 'Nenhum problema encontrado com estes filtros.'
+                  : 'Ainda não há problemas registrados nesta área.'}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (hasActiveFilters) {
+                    setSearchQuery('');
+                    setSelectedCategory('all');
+                    setSelectedStatus('all');
+                  } else {
+                    setIsPlacementMode(true);
+                  }
+                }}
+                className="mt-1 h-9 rounded-md px-3 text-xs"
+              >
+                {hasActiveFilters ? 'Limpar filtros' : 'Reportar um problema'}
+              </Button>
             </div>
           </div>
         )}
