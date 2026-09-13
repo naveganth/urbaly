@@ -14,13 +14,13 @@ export default function MapPage() {
               <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <MapPin className="size-4" />
               </span>
-              <h1 className="text-2xl font-bold tracking-tight">Mapa Urbano Colaborativo</h1>
+              <h1 className="text-2xl font-bold leading-tight tracking-tight text-balance">Mapa Urbano Colaborativo</h1>
               <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 hidden sm:inline-flex">
                 Macapá • Amapá
               </Badge>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Monitore problemas na via, registre ocorrências na sua rua com fotos e ajude a melhorar a cidade.
+              <span className="text-pretty leading-relaxed">Monitore problemas na via, registre ocorrências na sua rua com fotos e ajude a melhorar a cidade.</span>
             </p>
           </div>
 

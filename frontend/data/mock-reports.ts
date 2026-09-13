@@ -7,8 +7,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     description:
       'Buraco de grande proporção no asfalto que está obrigando veículos a invadirem a faixa contrária. Risco grave de acidentes e danos à suspensão dos carros.',
     category: 'pothole',
-    urgency: 'critical',
-    rating: 5,
     coordinates: [-51.0628, 0.0384],
     address: 'Av. FAB, esquina com Rua General Rondon',
     neighborhood: 'Centro',
@@ -24,7 +22,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     status: 'investigating',
     upvotes: 24,
     reportedBy: 'Carlos Menezes',
-    isAnonymous: false,
   },
   {
     id: 'rep-002',
@@ -32,8 +29,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     description:
       'Trecho da rua completamente às escuras durante a noite. Moradores e estudantes relatam sensação de insegurança e assaltos recentes.',
     category: 'lighting',
-    urgency: 'high',
-    rating: 4,
     coordinates: [-51.0545, 0.0319],
     address: 'Rua Cândido Mendes, altura do nº 1420',
     neighborhood: 'Centro',
@@ -48,7 +43,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     status: 'open',
     upvotes: 18,
     reportedBy: 'Mariana Duarte',
-    isAnonymous: false,
   },
   {
     id: 'rep-003',
@@ -56,8 +50,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     description:
       'Acúmulo de lixo e terra tampou a galeria de águas pluviais. Qualquer chuva rápida causa poça imensa cobrindo calçadas e dificultando travessia.',
     category: 'drainage',
-    urgency: 'high',
-    rating: 4,
     coordinates: [-51.0692, 0.0247],
     address: 'Av. Feliciano Coelho, 890',
     neighborhood: 'Trem',
@@ -72,7 +64,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     status: 'open',
     upvotes: 15,
     reportedBy: 'Anônimo',
-    isAnonymous: true,
   },
   {
     id: 'rep-004',
@@ -80,8 +71,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     description:
       'Restos de construção civil e lixo orgânico jogados na calçada. Mau cheiro, proliferação de insetos e obstrução da passagem de pedestres.',
     category: 'waste',
-    urgency: 'medium',
-    rating: 3,
     coordinates: [-51.0784, 0.0162],
     address: 'Rua Santos Dumont, próximo ao cruzamento',
     neighborhood: 'Santa Rita',
@@ -95,7 +84,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     status: 'investigating',
     upvotes: 9,
     reportedBy: 'Roberto Silva',
-    isAnonymous: false,
   },
   {
     id: 'rep-005',
@@ -103,8 +91,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     description:
       'Semáforo apagado intermitentemente causando congestionamento e risco constante de colisão entre pedestres e veículos velozes.',
     category: 'signage',
-    urgency: 'critical',
-    rating: 5,
     coordinates: [-51.0825, 0.0018],
     address: 'Rodovia JK, km 2',
     neighborhood: 'Jardim Marco Zero',
@@ -119,7 +105,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     status: 'open',
     upvotes: 32,
     reportedBy: 'Fernanda Leal',
-    isAnonymous: false,
   },
   {
     id: 'rep-006',
@@ -127,8 +112,6 @@ export const INITIAL_REPORTS: StreetReport[] = [
     description:
       'Buracos na calçada pública e degraus irregulares impedem o trânsito de cadeirantes e pessoas com deficiência visual.',
     category: 'accessibility',
-    urgency: 'medium',
-    rating: 3,
     coordinates: [-51.0741, 0.0115],
     address: 'Av. Padre Júlio Maria Lombaerd, 1600',
     neighborhood: 'Beirol',
@@ -142,6 +125,5 @@ export const INITIAL_REPORTS: StreetReport[] = [
     status: 'resolved',
     upvotes: 11,
     reportedBy: 'Lucas Picanço',
-    isAnonymous: false,
   },
 ];

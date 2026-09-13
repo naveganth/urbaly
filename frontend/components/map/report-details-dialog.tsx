@@ -10,7 +10,6 @@ import {
   Clock,
   AlertTriangle,
   User,
-  Star,
   ChevronLeft,
   ChevronRight,
   Camera,
@@ -26,7 +25,7 @@ import {
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
 import { CategoryIcon } from './category-icon';
-import { CATEGORIES, StreetReport, ReportStatus, ReportUrgency } from './types';
+import { CATEGORIES, StreetReport, ReportStatus } from './types';
 
 interface ReportDetailsDialogProps {
   report: StreetReport | null;
@@ -59,13 +58,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const URGENCY_LABELS: Record<ReportUrgency, { text: string; badge: string }> = {
-  low: { text: 'Urgência Baixa', badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
-  medium: { text: 'Urgência Média', badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
-  high: { text: 'Urgência Alta', badge: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30' },
-  critical: { text: 'Urgência Crítica', badge: 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30' },
-};
-
 export function ReportDetailsDialog({
   report,
   isOpen,
@@ -93,7 +85,6 @@ export function ReportDetailsDialog({
 
   const categoryInfo = CATEGORIES[report.category] || CATEGORIES.other;
   const statusInfo = STATUS_CONFIG[report.status] || STATUS_CONFIG.open;
-  const urgencyInfo = URGENCY_LABELS[report.urgency] || URGENCY_LABELS.medium;
   const StatusIcon = statusInfo.icon;
 
   const handleUpvote = () => {
@@ -144,9 +135,6 @@ export function ReportDetailsDialog({
 
             {/* Badges on top */}
             <div className="absolute top-3 left-3 flex items-center gap-2">
-              <Badge variant="outline" className={cn('text-xs font-semibold backdrop-blur-md', urgencyInfo.badge)}>
-                {urgencyInfo.text}
-              </Badge>
               {allImages.length > 1 && (
                 <span className="px-2 py-0.5 rounded-full bg-black/60 text-white text-[11px] font-mono backdrop-blur-md">
                   {activePhotoIndex + 1} de {allImages.length} fotos
@@ -224,30 +212,6 @@ export function ReportDetailsDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Severity Star Display */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-foreground">Gravidade Avaliada:</span>
-              <div className="flex items-center gap-0.5">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <Star
-                    key={i}
-                    className={cn(
-                      'size-4',
-                      i < report.rating
-                        ? 'fill-amber-400 text-amber-400'
-                        : 'text-muted-foreground/30'
-                    )}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-background border border-border text-foreground">
-              {report.rating} / 5
-            </span>
-          </div>
-
           {/* Description Text */}
           <div className="text-xs/relaxed text-muted-foreground bg-muted/20 p-3.5 rounded-xl border border-border">
             <p className="whitespace-pre-line text-foreground/90">{report.description}</p>
@@ -279,7 +243,10 @@ export function ReportDetailsDialog({
           <div className="flex items-center justify-between pt-3 border-t border-border mt-1">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <User className="size-3.5" />
-              <span>Por {report.reportedBy || 'Cidadão'}</span>
+              <span>
+                Por {report.reportedBy || 'Cidadão'}
+                {report.reporterTitle ? ` · ${report.reporterTitle}` : ''}
+              </span>
             </div>
 
             <div className="flex items-center gap-2">

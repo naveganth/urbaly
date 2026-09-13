@@ -7,7 +7,6 @@ import { useTheme } from 'next-themes';
 import {
   Plus,
   Search,
-  AlertCircle,
   X,
   Crosshair,
   SlidersHorizontal,
@@ -374,6 +373,7 @@ export default function Map() {
       ...newReportData,
       id: `rep-${Date.now()}`,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       status: 'open',
       upvotes: 1,
     };
@@ -422,6 +422,7 @@ export default function Map() {
                 type="button"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar busca"
               >
                 <X className="size-3.5" />
               </button>
@@ -444,10 +445,10 @@ export default function Map() {
               </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-xs">
-              <DropdownMenuLabel>Filtrar por Situação</DropdownMenuLabel>
+              <DropdownMenuLabel>              Filtrar por status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
-                Todos os Status
+                Todos os status
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSelectedStatus('open')}>
                 Em Aberto
@@ -463,7 +464,7 @@ export default function Map() {
         </div>
 
         {/* Primary Action Button */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex w-full items-center gap-2 shrink-0 md:w-auto">
           <Button
             type="button"
             size="sm"
@@ -474,7 +475,7 @@ export default function Map() {
               }
             }}
             className={cn(
-              'h-8 gap-1.5 text-xs font-semibold px-3.5 shadow-sm transition-all cursor-pointer',
+              'h-9 w-full min-w-0 gap-1.5 whitespace-nowrap px-3.5 text-xs font-semibold shadow-sm transition-[background-color,transform] duration-150 cursor-pointer active:scale-[0.98] md:w-auto',
               isPlacementMode
                 ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse'
                 : 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -483,7 +484,7 @@ export default function Map() {
             {isPlacementMode ? (
               <>
                 <X className="size-4" />
-                Cancelar Marcação
+                Cancelar marcação
               </>
             ) : (
               <>
@@ -548,11 +549,12 @@ export default function Map() {
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2.5 px-4 py-2 rounded-full bg-background/95 dark:bg-zinc-900/95 backdrop-blur-md border border-primary/50 shadow-xl text-xs font-semibold text-foreground animate-in fade-in slide-in-from-top-3">
             <span className="flex size-2 rounded-full bg-primary animate-ping" />
             <Crosshair className="size-4 text-primary" />
-            <span>Modo Mira Ativo: Clique na rua para marcar a ocorrência</span>
+            <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
             <button
               type="button"
               onClick={handleCancelPlacement}
               className="ml-2 text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label="Fechar aviso de marcação"
             >
               <X className="size-3.5" />
             </button>
@@ -563,7 +565,7 @@ export default function Map() {
         <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-background/90 dark:bg-zinc-900/90 backdrop-blur-md border border-border/80 shadow-lg text-[11px]">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <span className="font-semibold text-foreground">{filteredReports.length}</span>
-            <span>exibidos</span>
+            <span>resultados exibidos</span>
           </div>
           <span className="h-3 w-px bg-border" />
           <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
@@ -585,7 +587,7 @@ export default function Map() {
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex justify-center pointer-events-none">
             <div className="px-4 py-2 rounded-xl bg-background/90 dark:bg-zinc-900/90 backdrop-blur-md border border-border shadow-xl text-xs text-muted-foreground flex items-center gap-2">
               <Info className="size-4 text-amber-500" />
-              Nenhuma ocorrência encontrada para os filtros selecionados.
+              Nenhum problema encontrado com estes filtros.
             </div>
           </div>
         )}

@@ -9,8 +9,6 @@ export type ReportCategory =
   | 'vandalism' // Vandalismo / Patrimônio danificado
   | 'other'; // Outro tipo de problema
 
-export type ReportUrgency = 'low' | 'medium' | 'high' | 'critical';
-
 export type ReportStatus = 'open' | 'investigating' | 'resolved';
 
 export interface StreetReport {
@@ -18,8 +16,6 @@ export interface StreetReport {
   title: string;
   description: string;
   category: ReportCategory;
-  urgency: ReportUrgency;
-  rating: number; // 1 to 5 (gravidade do problema)
   coordinates: [number, number]; // [lng, lat]
   address: string;
   neighborhood?: string;
@@ -30,7 +26,8 @@ export interface StreetReport {
   status: ReportStatus;
   upvotes: number;
   reportedBy?: string;
-  isAnonymous?: boolean;
+  reporterTitle?: string;
+  updatedAt?: string;
 }
 
 export interface CategoryInfo {
