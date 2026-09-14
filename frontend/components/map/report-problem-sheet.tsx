@@ -154,7 +154,7 @@ export function ReportProblemSheet({
         side='right'
         showCloseButton={false}
         style={{ width: `${sheetWidth}px` }}
-        className='relative !max-w-none overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:translate-x-0 max-sm:border-0'
+        className='!max-w-none overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:translate-x-0 max-sm:border-0'
       >
         <div
           role='separator'
