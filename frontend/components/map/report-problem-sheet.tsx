@@ -154,7 +154,7 @@ export function ReportProblemSheet({
       <SheetContent
         side='right'
         showCloseButton={false}
-        style={{ width: `${sheetWidth}px` }}
+        style={{ width: `min(${sheetWidth}px, 100vw)` }}
         className='!max-w-none overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:translate-x-0 max-sm:border-0'
       >
         <div
@@ -171,7 +171,7 @@ export function ReportProblemSheet({
         </div>
         <form onSubmit={handleSubmit} className='flex flex-col min-h-full'>
           {/* Sticky Header */}
-          <div className='sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-5 pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
+          <div className='sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 pb-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
             <div className='flex min-w-0 items-center gap-3'>
               <span className='flex size-9 items-center justify-center bg-primary text-primary-foreground shrink-0'>
                 <CircleAlert className='size-5' aria-hidden='true' />
@@ -201,7 +201,7 @@ export function ReportProblemSheet({
                   type='button'
                   variant='ghost'
                   size='icon'
-                  className='absolute right-4 top-4 z-10 size-11 rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary active:!translate-y-0 active:!scale-100 sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
+                  className='absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] z-10 size-11 touch-manipulation rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary active:!translate-y-0 active:!scale-100 sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
                   aria-label='Fechar formulário de reporte'
                 />
               }
@@ -211,7 +211,7 @@ export function ReportProblemSheet({
           </div>
 
           {/* Form Content Body with Responsive Padding */}
-          <div className='mx-auto flex w-full max-w-2xl flex-1 flex-col gap-7 px-5 py-6 pb-32 sm:px-6 sm:py-5 lg:px-8'>
+          <div className='mx-auto flex w-full max-w-2xl flex-1 flex-col gap-7 px-5 py-6 pb-36 sm:px-6 sm:py-5 lg:px-8'>
             {errorMessage && (
               <div aria-live='polite' className='flex items-center gap-2.5 border-l-2 border-destructive bg-destructive/10 p-3.5 text-xs text-destructive'>
                 <CircleAlert className='size-4 shrink-0' aria-hidden='true' />
@@ -235,7 +235,7 @@ export function ReportProblemSheet({
                     variant='ghost'
                     size='xs'
                     onClick={() => setImages([])}
-                    className='text-destructive text-[11px] h-6 px-2 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive active:scale-[0.98] cursor-pointer transition-[background-color,transform] duration-150'
+                    className='h-11 touch-manipulation px-2 text-[11px] text-destructive transition-[background-color,transform] duration-150 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive active:scale-[0.98] sm:h-6'
                   >
                     Remover todas as fotos
                   </Button>
@@ -256,7 +256,7 @@ export function ReportProblemSheet({
                   <span className='text-xs font-medium leading-tight tracking-[0.02em] text-foreground'>
                     Fotos adicionadas
                   </span>
-                  <div className='grid grid-cols-2 sm:grid-cols-3 gap-2.5'>
+                  <div className='grid grid-cols-2 gap-2.5 sm:grid-cols-3'>
                     {images.map((imgUrl, index) => (
                       <div
                         key={index}
@@ -268,11 +268,11 @@ export function ReportProblemSheet({
                           draggable={false}
                           className='w-full h-full select-none object-cover'
                         />
-                        <div className='absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 motion-reduce:transition-none'>
+                        <div className='absolute inset-0 flex items-center justify-center bg-black/40 opacity-100 transition-opacity duration-150 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 motion-reduce:transition-none'>
                           <button
                             type='button'
                             onClick={() => handleRemoveImage(index)}
-                            className='size-7 bg-destructive text-destructive-foreground flex items-center justify-center hover:scale-105 focus-visible:ring-2 focus-visible:ring-destructive active:scale-95 transition-transform cursor-pointer'
+                            className='flex size-11 touch-manipulation items-center justify-center bg-destructive text-destructive-foreground transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-destructive active:scale-95 sm:size-7'
                             title='Remover foto'
                           >
                             <X className='size-4' />
@@ -293,12 +293,16 @@ export function ReportProblemSheet({
             <div className='order-1'>
               <div>
                 <div className='flex items-center justify-between gap-3'>
-                  <span className='text-xs leading-relaxed tracking-[0.01em] text-muted-foreground'>
-                    Resuma o problema em uma frase
-                  </span>
+                                    <Label
+                    htmlFor='report-description'
+                    className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
+                  >
+                    Descreva o problema
+                  </Label>
                   <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
                     {title.length}/70
                   </span>
+                  
                 </div>
 
                 <AnimatedInput
@@ -307,7 +311,7 @@ export function ReportProblemSheet({
                   value={title}
                   onChange={setTitle}
                   placeholder='Ex: Buraco profundo na pista esquerda em frente ao comércio'
-                  inputClassName='text-xs'
+                  inputClassName='text-base sm:text-xs'
                   required
                 />
               </div>
@@ -334,7 +338,7 @@ export function ReportProblemSheet({
                       value={address}
                       onChange={setAddress}
                       placeholder='Ex: Av. FAB, esquina com Rua General Rondon'
-                      inputClassName='text-xs'
+                      inputClassName='text-base sm:text-xs'
                       required
                     />
                     <p className='mt-1.5 pl-1 text-xs leading-relaxed text-muted-foreground text-pretty'>
@@ -349,7 +353,7 @@ export function ReportProblemSheet({
                         value={neighborhood}
                         onChange={setNeighborhood}
                         placeholder='Ex: Centro / Trem / Beirol'
-                        inputClassName='text-xs'
+                        inputClassName='text-base sm:text-xs'
                       />
                     </div>
                     <div>
@@ -358,7 +362,7 @@ export function ReportProblemSheet({
                         value={referencePoint}
                         onChange={setReferencePoint}
                         placeholder='Ex: Em frente à farmácia / praça'
-                        inputClassName='text-xs'
+                        inputClassName='text-base sm:text-xs'
                       />
                     </div>
                   </div>
@@ -388,7 +392,7 @@ export function ReportProblemSheet({
                           type='button'
                           onClick={() => setCategory(catKey)}
                           className={cn(
-                            'relative flex items-start gap-2.5 rounded-md border p-3 pr-10 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.99]',
+                            'relative flex min-h-11 touch-manipulation items-start gap-2.5 rounded-md border p-3 pr-10 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.99]',
                             isSelected
                               ? 'border-primary bg-primary/5 shadow-xs ring-1.5 ring-primary'
                               : 'border-border bg-card hover:bg-muted/50 hover:border-muted-foreground/30 focus-visible:bg-muted/50',
@@ -447,7 +451,7 @@ export function ReportProblemSheet({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder='Explique o que aconteceu, onde afeta a via e há quanto tempo o problema existe.'
-                  className='mt-1.5 resize-y border-border bg-background text-xs leading-relaxed'
+                  className='mt-1.5 min-h-28 resize-y border-border bg-background text-base leading-relaxed sm:text-xs'
                   required
                 />
               </div>
@@ -477,7 +481,7 @@ export function ReportProblemSheet({
                   size='default'
                   onClick={handleClose}
                   disabled={isSubmitting}
-                  className='flex-1 cursor-pointer text-xs transition-colors duration-150 sm:flex-none'
+                  className='h-11 flex-1 touch-manipulation cursor-pointer text-xs transition-colors duration-150 sm:h-8 sm:flex-none'
                 >
                   Cancelar
                 </Button>
@@ -486,7 +490,7 @@ export function ReportProblemSheet({
                   type='submit'
                   size='default'
                   disabled={isSubmitting || !coordinates}
-                  className='min-w-0 flex-1 cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.98] sm:min-w-[9.5rem] sm:flex-none'
+                  className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.98] sm:h-8 sm:min-w-[9.5rem] sm:flex-none'
                 >
                   {isSubmitting ? (
                     <>

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CloudUpload, ImagePlus, X } from 'lucide-react';
+import { CloudUpload, ImagePlus } from 'lucide-react';
 import { cn } from 'cn';
 
 interface AnimatedFileUploadProps {
@@ -41,7 +41,15 @@ export function AnimatedFileUpload({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={() => inputRef.current?.click()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragging(true);
@@ -49,7 +57,7 @@ export function AnimatedFileUpload({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
       className={cn(
-        'group relative flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background/70 px-4 py-4 text-center transition-all duration-200 hover:border-primary/60 hover:bg-primary/5',
+        'group relative flex min-h-28 touch-manipulation cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background/70 px-4 py-4 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:border-primary/60 hover:bg-primary/5',
         isDragging && 'border-primary bg-primary/5 shadow-sm',
         className,
       )}
