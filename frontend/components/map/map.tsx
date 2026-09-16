@@ -3,7 +3,7 @@
 import * as React from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/components/theme-provider';
 import {
   Search,
   X,

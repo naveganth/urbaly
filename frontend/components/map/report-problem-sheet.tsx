@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetTitle,
   SheetDescription,
@@ -145,7 +146,7 @@ export function ReportProblemSheet({
 
   const handleClose = () => {
     onOpenChange(false);
-    if (onCancelPlacement) onCancelPlacement();
+    onCancelPlacement?.();
   };
 
   return (
@@ -173,7 +174,7 @@ export function ReportProblemSheet({
           <div className='sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-5 pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
             <div className='flex min-w-0 items-center gap-3'>
               <span className='flex size-9 items-center justify-center bg-primary text-primary-foreground shrink-0'>
-                <CircleAlert className='report-alert-icon size-5' aria-hidden='true' />
+                <CircleAlert className='size-5' aria-hidden='true' />
               </span>
               <div className='min-w-0'>
                 <SheetTitle className='truncate text-lg font-bold leading-[1.1] tracking-tight text-foreground text-balance sm:text-xl'>
@@ -193,16 +194,20 @@ export function ReportProblemSheet({
               </div>
             </div>
 
-            <Button
-              type='button'
-              variant='ghost'
-              size='icon'
-              onClick={handleClose}
-              className='absolute right-4 top-4 z-10 size-11 rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
-              aria-label='Fechar formulário de reporte'
+            <SheetClose
+              onClick={onCancelPlacement}
+              render={
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  className='absolute right-4 top-4 z-10 size-11 rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary active:!translate-y-0 active:!scale-100 sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
+                  aria-label='Fechar formulário de reporte'
+                />
+              }
             >
               <X className='size-4' aria-hidden='true' />
-            </Button>
+            </SheetClose>
           </div>
 
           {/* Form Content Body with Responsive Padding */}
