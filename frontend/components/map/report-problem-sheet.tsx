@@ -46,7 +46,7 @@ export function ReportProblemSheet({
   onSubmit,
   onCancelPlacement,
 }: ReportProblemSheetProps) {
-  const [category, setCategory] = React.useState<ReportCategory>('pothole');
+  const [category, setCategory] = React.useState<ReportCategory | null>(null);
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [address, setAddress] = React.useState('');
@@ -59,7 +59,7 @@ export function ReportProblemSheet({
   const [sheetWidth, setSheetWidth] = React.useState(736);
   const resizeStartRef = React.useRef<{ x: number; width: number } | null>(null);
   const completedRequiredFields = [
-    Boolean(coordinates),
+    Boolean(category),
     Boolean(title.trim()),
     Boolean(description.trim()),
   ].filter(Boolean).length;
@@ -110,6 +110,10 @@ export function ReportProblemSheet({
       );
       return;
     }
+    if (!category) {
+      setErrorMessage('Escolha uma categoria para o problema.');
+      return;
+    }
 
     setErrorMessage(null);
     setIsSubmitting(true);
@@ -134,6 +138,7 @@ export function ReportProblemSheet({
 
       // Reset form
       setIsSubmitting(false);
+      setCategory(null);
       setTitle('');
       setDescription('');
       setAddress('');
