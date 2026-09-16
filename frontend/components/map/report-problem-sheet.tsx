@@ -160,7 +160,7 @@ export function ReportProblemSheet({
         side='right'
         showCloseButton={false}
         style={{ width: `min(${sheetWidth}px, 100vw)` }}
-        className='!max-w-none overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:translate-x-0 max-sm:border-0'
+        className='max-w-none! overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-dvh max-sm:w-full! max-sm:max-w-none! max-sm:translate-x-0 max-sm:border-0'
       >
         <div
           role='separator'
@@ -238,7 +238,7 @@ export function ReportProblemSheet({
                     variant='ghost'
                     size='xs'
                     onClick={() => setImages([])}
-                    className='h-11 touch-manipulation px-2 text-[11px] text-destructive transition-colors duration-150 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive active:!scale-100 active:!translate-y-0 sm:h-6'
+                    className='h-11 touch-manipulation px-2 text-[11px] text-destructive transition-colors duration-150 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive active:scale-100! active:translate-y-0! sm:h-6'
                   >
                     Remover todas as fotos
                   </Button>
@@ -265,6 +265,7 @@ export function ReportProblemSheet({
                         key={index}
                         className='relative group overflow-hidden border border-border bg-muted aspect-video transition-[border-color,box-shadow] duration-150 hover:border-foreground/30 hover:shadow-sm'
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imgUrl}
                           alt={`Foto da ocorrência ${index + 1}`}
@@ -493,7 +494,7 @@ export function ReportProblemSheet({
                   size='default'
                   onClick={handleClose}
                   disabled={isSubmitting}
-                  className='h-11 flex-1 touch-manipulation cursor-pointer text-xs transition-colors duration-150 active:!scale-100 active:!translate-y-0 sm:h-8 sm:flex-none'
+                  className='h-11 flex-1 touch-manipulation cursor-pointer text-xs transition-colors duration-150 active:scale-100! active:translate-y-0! sm:h-8 sm:flex-none'
                 >
                   Cancelar
                 </Button>
@@ -502,7 +503,7 @@ export function ReportProblemSheet({
                   type='submit'
                   size='default'
                   disabled={isSubmitting || !coordinates}
-                  className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-colors duration-150 active:!scale-100 active:!translate-y-0 sm:h-8 sm:min-w-[9.5rem] sm:flex-none'
+                  className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-colors duration-150 active:scale-100! active:translate-y-0! sm:h-8 sm:min-w-38 sm:flex-none'
                 >
                   {isSubmitting ? (
                     <>

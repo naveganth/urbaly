@@ -1,8 +1,8 @@
 'use client';
 
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 export interface FaqSearchableProps {
   description?: string;
@@ -50,26 +50,13 @@ const defaultFaqs = [
 
 export function FaqSearchable({
   title = 'Frequently Asked Questions',
-  description = 'Search through our FAQ to find answers to your questions',
-  searchPlaceholder = 'Search questions...',
   noResultsText = 'No matching questions found. Try a different search term.',
   faqs = defaultFaqs,
 }: FaqSearchableProps) {
-  const [searchQuery, setSearchQuery] = useState('');
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const shouldReduceMotion = useReducedMotion();
 
-  const filteredFaqs = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return faqs;
-    }
-    const query = searchQuery.toLowerCase();
-    return faqs.filter(
-      (faq) =>
-        faq.question.toLowerCase().includes(query) ||
-        faq.answer.toLowerCase().includes(query),
-    );
-  }, [faqs, searchQuery]);
+  const filteredFaqs = faqs;
 
   const toggleAccordion = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);

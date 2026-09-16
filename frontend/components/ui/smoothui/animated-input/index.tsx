@@ -32,7 +32,7 @@ export default function AnimatedInput({
   return (
     <div className={`relative flex items-center ${className}`}>
       {icon && (
-        <span aria-hidden='true' className='absolute left-3 z-[1] text-muted-foreground'>
+        <span aria-hidden='true' className='absolute left-3 z-1 text-muted-foreground'>
           {icon}
         </span>
       )}

@@ -12,7 +12,6 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
-  Camera,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
@@ -68,9 +67,9 @@ export function ReportDetailsDialog({
   const [copied, setCopied] = React.useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = React.useState(0);
 
-  // Reset photo index and upvote tracking when report changes
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   React.useEffect(() => {
+    // Reset photo index and upvote tracking when report changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasUpvoted(false);
     setActivePhotoIndex(0);
   }, [report?.id]);
@@ -126,6 +125,7 @@ export function ReportDetailsDialog({
         {/* Top Image Gallery Carousel */}
         {allImages.length > 0 && (
           <div className="relative w-full h-56 bg-black/40 overflow-hidden group">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={allImages[activePhotoIndex]}
               alt={`${report.title} - Foto ${activePhotoIndex + 1}`}

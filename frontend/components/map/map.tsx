@@ -7,18 +7,14 @@ import { useTheme } from '@/components/theme-provider';
 import {
   Search,
   X,
-  Plus,
   CircleAlert,
   Crosshair,
   SlidersHorizontal,
   Info,
-  Layers,
-  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,18 +32,6 @@ import { createGooglePinElement } from './google-pin';
 
 
 const LOCAL_STORAGE_KEY = 'urbaly_street_reports_v2';
-
-const CATEGORY_HEX_COLORS: Record<ReportCategory, { light: string; dark: string }> = {
-  pothole: { light: '#f59e0b', dark: '#fbbf24' },
-  lighting: { light: '#eab308', dark: '#facc15' },
-  waste: { light: '#10b981', dark: '#34d399' },
-  drainage: { light: '#0284c7', dark: '#38bdf8' },
-  signage: { light: '#f43f5e', dark: '#fb7185' },
-  accessibility: { light: '#9333ea', dark: '#c084fc' },
-  greenery: { light: '#16a34a', dark: '#4ade80' },
-  vandalism: { light: '#ea580c', dark: '#fb923c' },
-  other: { light: '#64748b', dark: '#94a3b8' },
-};
 
 function getMapTiles(isDark: boolean) {
   const mapApiKey = process.env.NEXT_PUBLIC_MAP_API_KEY?.trim();
@@ -73,8 +57,9 @@ export default function Map() {
   const placementMarkerRef = React.useRef<maplibregl.Marker | null>(null);
   const previousFilteredIdsRef = React.useRef<string[]>([]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   React.useEffect(() => {
+    // This state gates browser-only map work until hydration completes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
   }, []);
 
@@ -100,7 +85,6 @@ export default function Map() {
       console.error('Error loading reports from localStorage:', e);
       setStorageError('Não foi possível carregar os registros salvos neste dispositivo.');
     } finally {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStorageReady(true);
     }
   }, []);
@@ -113,6 +97,7 @@ export default function Map() {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reports));
     } catch (e) {
       console.error('Error saving reports to localStorage:', e);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStorageError('Não foi possível salvar alterações neste dispositivo.');
     }
   }, [reports, storageReady]);
@@ -249,7 +234,7 @@ export default function Map() {
       map.remove();
       mapRef.current = null;
     };
-  }, [mapRetryKey]);
+  }, [isDark, mapRetryKey]);
 
   // Update map tile theme on dark mode change
   React.useEffect(() => {
@@ -616,7 +601,7 @@ export default function Map() {
       <div
         ref={mapContainerRef}
         className={cn(
-          'relative h-[clamp(24rem,68dvh,40rem)] min-h-[24rem] w-full overflow-hidden rounded-md border border-border/70 bg-muted shadow-lg shadow-foreground/5 transition-[border-color,box-shadow] md:min-h-[30rem]',
+          'relative h-[clamp(24rem,68dvh,40rem)] min-h-96 w-full overflow-hidden rounded-md border border-border/70 bg-muted shadow-lg shadow-foreground/5 transition-[border-color,box-shadow] md:min-h-120',
           isPlacementMode && 'placement-mode-active'
         )}
       >
