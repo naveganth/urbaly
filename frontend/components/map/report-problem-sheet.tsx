@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
 import {
@@ -20,7 +21,6 @@ import {
   SheetDescription,
 } from '@/components/ui/shadcn/sheet';
 import AnimatedFileUpload from '@/components/ui/smoothui/animated-file-upload';
-import AnimatedInput from '@/components/ui/smoothui/animated-input';
 import AnimatedProgressBar from '@/components/ui/smoothui/animated-progress-bar';
 import { CategoryIcon } from './category-icon';
 import {
@@ -171,7 +171,7 @@ export function ReportProblemSheet({
         </div>
         <form onSubmit={handleSubmit} className='flex flex-col min-h-full'>
           {/* Sticky Header */}
-          <div className='sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 pb-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
+          <div className='sticky top-0 z-20 flex items-center gap-3 bg-background/95 px-5 pb-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
             <div className='flex min-w-0 items-center gap-3'>
               <span className='flex size-9 items-center justify-center bg-primary text-primary-foreground shrink-0'>
                 <CircleAlert className='size-5' aria-hidden='true' />
@@ -197,11 +197,9 @@ export function ReportProblemSheet({
             <SheetClose
               onClick={onCancelPlacement}
               render={
-                <Button
+                <button
                   type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] z-10 size-11 touch-manipulation rounded-md border border-border bg-background text-foreground shadow-xs hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary active:!translate-y-0 active:!scale-100 sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
+                  className='absolute right-4 top-4 z-10 flex size-11 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:right-5 sm:top-1/2 sm:-translate-y-1/2'
                   aria-label='Fechar formulário de reporte'
                 />
               }
@@ -220,7 +218,7 @@ export function ReportProblemSheet({
             )}
 
             {/* Multiple Photos Upload Section */}
-            <div className='order-0 flex flex-col gap-3 border-b border-border pb-7'>
+            <div className='order-0 flex flex-col gap-3 pb-7'>
               <div className='flex items-center justify-between'>
                 <div className='flex items-center gap-2'>
                   <Camera className='size-4 text-primary' />
@@ -235,7 +233,7 @@ export function ReportProblemSheet({
                     variant='ghost'
                     size='xs'
                     onClick={() => setImages([])}
-                    className='h-11 touch-manipulation px-2 text-[11px] text-destructive transition-[background-color,transform] duration-150 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive active:scale-[0.98] sm:h-6'
+                    className='h-11 touch-manipulation px-2 text-[11px] text-destructive transition-colors duration-150 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive active:!scale-100 active:!translate-y-0 sm:h-6'
                   >
                     Remover todas as fotos
                   </Button>
@@ -272,7 +270,7 @@ export function ReportProblemSheet({
                           <button
                             type='button'
                             onClick={() => handleRemoveImage(index)}
-                            className='flex size-11 touch-manipulation items-center justify-center bg-destructive text-destructive-foreground transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-destructive active:scale-95 sm:size-7'
+                            className='flex size-11 touch-manipulation items-center justify-center bg-destructive text-destructive-foreground focus-visible:ring-2 focus-visible:ring-destructive sm:size-7'
                             title='Remover foto'
                           >
                             <X className='size-4' />
@@ -291,86 +289,95 @@ export function ReportProblemSheet({
 
             {/* Title */}
             <div className='order-1'>
-              <div>
-                <div className='flex items-center justify-between gap-3'>
-                                    <Label
-                    htmlFor='report-description'
-                    className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
-                  >
-                    Descreva o problema
-                  </Label>
-                  <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
-                    {title.length}/70
-                  </span>
-                  
-                </div>
-
-                <AnimatedInput
-                  maxLength={70}
-                  label='Título do problema'
-                  value={title}
-                  onChange={setTitle}
-                  placeholder='Ex: Buraco profundo na pista esquerda em frente ao comércio'
-                  inputClassName='text-base sm:text-xs'
-                  required
-                />
+              <div className='flex items-center justify-between gap-3'>
+                <Label
+                  htmlFor='report-title'
+                  className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
+                >
+                  Título do problema
+                </Label>
+                <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
+                  {title.length}/70
+                </span>
               </div>
+              <Input
+                id='report-title'
+                maxLength={70}
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder='Ex: Buraco profundo na pista esquerda em frente ao comércio'
+                className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
+                required
+              />
             </div>
 
-              {/* Location Section */}
-              <section
-                aria-labelledby='report-location-heading'
-                className='order-3 flex flex-col gap-3 border-b border-border pb-7'
+            {/* Location Section */}
+            <section
+              aria-labelledby='report-location-heading'
+              className='order-3 flex flex-col gap-3 pb-7'
+            >
+              <Label
+                id='report-location-heading'
+                className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
               >
-                  <div className='flex items-center gap-2'>
+                Onde aconteceu
+              </Label>
+
+              <div className='flex flex-col gap-3'>
+                <div>
+                  <Label
+                    htmlFor='report-address'
+                    className='text-xs font-medium text-muted-foreground'
+                  >
+                    Rua ou avenida
+                  </Label>
+                  <Input
+                    id='report-address'
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    placeholder='Ex: Av. FAB, esquina com Rua General Rondon'
+                    className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
+                    required
+                  />
+                </div>
+
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                  <div>
                     <Label
-                      id='report-location-heading'
-                      className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
+                      htmlFor='report-neighborhood'
+                      className='text-xs font-medium text-muted-foreground'
                     >
-                      Onde aconteceu
+                      Bairro
                     </Label>
-                  </div>
-
-                  <div className='flex flex-col gap-3'>
-                    <div>
-                    <AnimatedInput
-                      label='Rua ou avenida'
-                      value={address}
-                      onChange={setAddress}
-                      placeholder='Ex: Av. FAB, esquina com Rua General Rondon'
-                      inputClassName='text-base sm:text-xs'
-                      required
+                    <Input
+                      id='report-neighborhood'
+                      value={neighborhood}
+                      onChange={(event) => setNeighborhood(event.target.value)}
+                      placeholder='Ex: Centro / Trem / Beirol'
+                      className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
                     />
-                    <p className='mt-1.5 pl-1 text-xs leading-relaxed text-muted-foreground text-pretty'>
-                      Informe a via onde o problema acontece.
-                    </p>
                   </div>
-
-                  <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
-                    <div>
-                      <AnimatedInput
-                        label='Bairro'
-                        value={neighborhood}
-                        onChange={setNeighborhood}
-                        placeholder='Ex: Centro / Trem / Beirol'
-                        inputClassName='text-base sm:text-xs'
-                      />
-                    </div>
-                    <div>
-                      <AnimatedInput
-                        label='Ponto de referência'
-                        value={referencePoint}
-                        onChange={setReferencePoint}
-                        placeholder='Ex: Em frente à farmácia / praça'
-                        inputClassName='text-base sm:text-xs'
-                      />
-                    </div>
+                  <div>
+                    <Label
+                      htmlFor='report-reference-point'
+                      className='text-xs font-medium text-muted-foreground'
+                    >
+                      Ponto de referência
+                    </Label>
+                    <Input
+                      id='report-reference-point'
+                      value={referencePoint}
+                      onChange={(event) => setReferencePoint(event.target.value)}
+                      placeholder='Ex: Em frente à farmácia / praça'
+                      className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
+                    />
                   </div>
                 </div>
-              </section>
+              </div>
+            </section>
 
-              {/* Category Selection: Fully readable, NO truncation */}
-              <div className='order-4 flex flex-col gap-2.5 border-b border-border pb-7'>
+            {/* Category Selection */}
+            <div className='order-4 flex flex-col gap-2.5 pb-7'>
                 <div className='flex items-center justify-between'>
                   <Label className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'>
                     Tipo de problema
@@ -392,7 +399,7 @@ export function ReportProblemSheet({
                           type='button'
                           onClick={() => setCategory(catKey)}
                           className={cn(
-                            'relative flex min-h-11 touch-manipulation items-start gap-2.5 rounded-md border p-3 pr-10 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.99]',
+                            'relative flex min-h-11 touch-manipulation items-start gap-2.5 rounded-md border p-3 pr-10 text-left transition-[background-color,border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                             isSelected
                               ? 'border-primary bg-primary/5 shadow-xs ring-1.5 ring-primary'
                               : 'border-border bg-card hover:bg-muted/50 hover:border-muted-foreground/30 focus-visible:bg-muted/50',
@@ -423,7 +430,7 @@ export function ReportProblemSheet({
                               isSelected ? 'opacity-100' : 'pointer-events-none opacity-0',
                             )}
                           >
-                              <Check className='size-2.5 stroke-[3]' />
+                              <Check className='size-2.5 stroke-3' />
                           </span>
                         </button>
                       );
@@ -451,19 +458,19 @@ export function ReportProblemSheet({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder='Explique o que aconteceu, onde afeta a via e há quanto tempo o problema existe.'
-                  className='mt-1.5 min-h-28 resize-y border-border bg-background text-base leading-relaxed sm:text-xs'
+                  className='mt-1.5 min-h-28 resize-y rounded-none border-border bg-background text-base leading-relaxed sm:text-xs'
                   required
                 />
               </div>
 
-            <div className='order-5 flex items-center justify-between border-b border-border pb-7 text-xs'>
+            <div className='order-5 flex items-center justify-between pb-7 text-xs'>
               <span className='text-xs leading-tight text-muted-foreground'>Você está reportando como</span>
               <span className='text-xs font-medium leading-tight text-foreground'>Usuário atual · cidadão</span>
             </div>
           </div>
 
           {/* Sticky Action Footer */}
-          <div className='sticky bottom-0 z-30 flex flex-col gap-3 border-t border-border bg-background/95 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-8'>
+          <div className='sticky bottom-0 z-30 flex flex-col gap-3 bg-background/95 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-8'>
             <div className='flex items-center gap-3'>
               <AnimatedProgressBar value={requiredProgress} className='flex-1' />
               <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
@@ -481,7 +488,7 @@ export function ReportProblemSheet({
                   size='default'
                   onClick={handleClose}
                   disabled={isSubmitting}
-                  className='h-11 flex-1 touch-manipulation cursor-pointer text-xs transition-colors duration-150 sm:h-8 sm:flex-none'
+                  className='h-11 flex-1 touch-manipulation cursor-pointer text-xs transition-colors duration-150 active:!scale-100 active:!translate-y-0 sm:h-8 sm:flex-none'
                 >
                   Cancelar
                 </Button>
@@ -490,7 +497,7 @@ export function ReportProblemSheet({
                   type='submit'
                   size='default'
                   disabled={isSubmitting || !coordinates}
-                  className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-[background-color,transform] duration-150 active:scale-[0.98] sm:h-8 sm:min-w-[9.5rem] sm:flex-none'
+                  className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-colors duration-150 active:!scale-100 active:!translate-y-0 sm:h-8 sm:min-w-[9.5rem] sm:flex-none'
                 >
                   {isSubmitting ? (
                     <>
