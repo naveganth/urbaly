@@ -35,7 +35,7 @@ interface ReportProblemSheetProps {
   coordinates: [number, number] | null;
   onSubmit: (
     report: Omit<StreetReport, 'id' | 'createdAt' | 'upvotes' | 'status'>,
-  ) => void;
+  ) => void | Promise<void>;
   onCancelPlacement?: () => void;
 }
 
@@ -49,9 +49,6 @@ export function ReportProblemSheet({
   const [category, setCategory] = React.useState<ReportCategory | null>(null);
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
-  const [address, setAddress] = React.useState('');
-  const [neighborhood, setNeighborhood] = React.useState('');
-  const [referencePoint, setReferencePoint] = React.useState('');
   const [images, setImages] = React.useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -83,8 +80,16 @@ export function ReportProblemSheet({
 
   const handleFilesSelected = (files: File[]) => {
     if (files.length > 0) {
-      const newUrls = files.map((file) => URL.createObjectURL(file));
-      setImages((prev) => [...prev, ...newUrls]);
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.addEventListener('load', () => {
+          const result = reader.result;
+          if (typeof result === 'string') {
+            setImages((prev) => [...prev, result]);
+          }
+        });
+        reader.readAsDataURL(file);
+      });
     }
   };
 
@@ -92,7 +97,7 @@ export function ReportProblemSheet({
     setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!coordinates) {
       setErrorMessage(
@@ -118,17 +123,13 @@ export function ReportProblemSheet({
     setErrorMessage(null);
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      onSubmit({
+    try {
+      await onSubmit({
         title: title.trim(),
         description: description.trim(),
         category,
         coordinates,
-        address:
-          address.trim() ||
-          `Local próximo a (${coordinates[1].toFixed(4)}, ${coordinates[0].toFixed(4)})`,
-        neighborhood: neighborhood.trim() || undefined,
-        referencePoint: referencePoint.trim() || undefined,
+        address: `Local próximo a (${coordinates[1].toFixed(4)}, ${coordinates[0].toFixed(4)})`,
         images,
         imageUrl: images[0] || undefined,
         reportedBy: 'Usuário atual',
@@ -141,12 +142,17 @@ export function ReportProblemSheet({
       setCategory(null);
       setTitle('');
       setDescription('');
-      setAddress('');
-      setNeighborhood('');
-      setReferencePoint('');
       setImages([]);
       onOpenChange(false);
-    }, 450);
+    } catch (error: unknown) {
+      console.error('Error submitting report:', error);
+      setIsSubmitting(false);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível enviar o problema. Tente novamente.'
+      );
+    }
   };
 
   const handleClose = () => {
@@ -317,73 +323,8 @@ export function ReportProblemSheet({
               />
             </div>
 
-            {/* Location Section */}
-            <section
-              aria-labelledby='report-location-heading'
-              className='order-3 flex flex-col gap-3 pb-7'
-            >
-              <Label
-                id='report-location-heading'
-                className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
-              >
-                Onde aconteceu
-              </Label>
-
-              <div className='flex flex-col gap-3'>
-                <div>
-                  <Label
-                    htmlFor='report-address'
-                    className='text-xs font-medium text-muted-foreground'
-                  >
-                    Rua ou avenida
-                  </Label>
-                  <Input
-                    id='report-address'
-                    value={address}
-                    onChange={(event) => setAddress(event.target.value)}
-                    placeholder='Ex: Av. FAB, esquina com Rua General Rondon'
-                    className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
-                    required
-                  />
-                </div>
-
-                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-                  <div>
-                    <Label
-                      htmlFor='report-neighborhood'
-                      className='text-xs font-medium text-muted-foreground'
-                    >
-                      Bairro
-                    </Label>
-                    <Input
-                      id='report-neighborhood'
-                      value={neighborhood}
-                      onChange={(event) => setNeighborhood(event.target.value)}
-                      placeholder='Ex: Centro / Trem / Beirol'
-                      className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
-                    />
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor='report-reference-point'
-                      className='text-xs font-medium text-muted-foreground'
-                    >
-                      Ponto de referência
-                    </Label>
-                    <Input
-                      id='report-reference-point'
-                      value={referencePoint}
-                      onChange={(event) => setReferencePoint(event.target.value)}
-                      placeholder='Ex: Em frente à farmácia / praça'
-                      className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-
             {/* Category Selection */}
-            <div className='order-4 flex flex-col gap-2.5 pb-7'>
+            <div className='order-3 flex flex-col gap-2.5 pb-7'>
                 <div className='flex items-center justify-between'>
                   <Label className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'>
                     Tipo de problema

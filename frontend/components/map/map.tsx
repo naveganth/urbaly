@@ -23,15 +23,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/shadcn/dropdown-menu';
+import { createMapReport, getMapReports } from '@/app/actions/api';
 import { StreetReport, ReportCategory, ReportStatus, CATEGORIES } from './types';
-import { INITIAL_REPORTS } from '@/data/mock-reports';
 import { ReportProblemSheet } from './report-problem-sheet';
 import { ReportDetailsDialog } from './report-details-dialog';
 import { CategoryIcon } from './category-icon';
 import { createGooglePinElement } from './google-pin';
 
-
-const LOCAL_STORAGE_KEY = 'urbaly_street_reports_v2';
+const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
 
 function getMapTiles(isDark: boolean) {
   const mapApiKey = process.env.NEXT_PUBLIC_MAP_API_KEY?.trim();
@@ -63,44 +62,59 @@ export default function Map() {
     setHasMounted(true);
   }, []);
 
-  // Reports state with LocalStorage persistence
-  const [reports, setReports] = React.useState<StreetReport[]>(INITIAL_REPORTS);
-  const [storageReady, setStorageReady] = React.useState(false);
-  const [storageError, setStorageError] = React.useState<string | null>(null);
+  const [reports, setReports] = React.useState<StreetReport[]>([]);
+  const [reportsError, setReportsError] = React.useState<string | null>(null);
+  const [isReportsLoading, setIsReportsLoading] = React.useState(true);
   const [isOffline, setIsOffline] = React.useState(false);
+  const [mapRetryKey, setMapRetryKey] = React.useState(0);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsReportsLoading(true);
+    setReportsError(null);
 
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setReports(parsed);
-        }
-      }
-    } catch (e) {
-      console.error('Error loading reports from localStorage:', e);
-      setStorageError('Não foi possível carregar os registros salvos neste dispositivo.');
-    } finally {
-      setStorageReady(true);
-    }
-  }, []);
+    getMapReports()
+      .then((apiReports) => {
+        if (cancelled) return;
+        setReports(
+          apiReports.map((report) => ({
+            id: String(report.id),
+            title: report.titulo,
+            description: report.descricao || 'Sem descrição informada.',
+            category:
+              (Object.keys(CATEGORIES) as ReportCategory[])[report.categoria] || 'other',
+            coordinates: report.ponto,
+            address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
+            images: report.foto_nome
+              ? [`${REPORT_IMAGE_CDN}/${encodeURIComponent(report.foto_nome)}`]
+              : report.foto_data
+                ? [`data:image/jpeg;base64,${report.foto_data}`]
+                : [],
+            createdAt: report.data_criacao,
+            updatedAt: report.data_atualizacao,
+            status: 'open',
+            upvotes: 0,
+          }))
+        );
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.error('Error loading map reports:', error);
+        setReportsError(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar os registros do mapa.'
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setIsReportsLoading(false);
+      });
 
-  // Sync to local storage
-  React.useEffect(() => {
-    if (!storageReady || typeof window === 'undefined') return;
-
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reports));
-    } catch (e) {
-      console.error('Error saving reports to localStorage:', e);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setStorageError('Não foi possível salvar alterações neste dispositivo.');
-    }
-  }, [reports, storageReady]);
+    return () => {
+      cancelled = true;
+    };
+  }, [mapRetryKey]);
 
   React.useEffect(() => {
     const updateOfflineState = () => setIsOffline(!navigator.onLine);
@@ -122,7 +136,6 @@ export default function Map() {
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
-  const [mapRetryKey, setMapRetryKey] = React.useState(0);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -267,19 +280,24 @@ export default function Map() {
     if (!map || !hasMounted) return;
 
     const nextFilteredIds = filteredReports.map((report) => report.id);
-    const hasFilteredListChanged =
-      previousFilteredIdsRef.current.length === 0 ||
-      previousFilteredIdsRef.current.length !== nextFilteredIds.length ||
-      previousFilteredIdsRef.current.some((id, index) => id !== nextFilteredIds[index]);
+    const previousIds = previousFilteredIdsRef.current;
+    const isOnlyAddingReports =
+      previousIds.length > 0 &&
+      previousIds.every((id) => nextFilteredIds.includes(id)) &&
+      nextFilteredIds.length > previousIds.length;
 
-    // Clear existing markers
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
+    if (!isOnlyAddingReports) {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+    }
 
-    // Add markers for filtered reports one-by-one with Google Maps pin drop animation
-    filteredReports.forEach((report, index) => {
-      const delayMs = hasFilteredListChanged ? index * 120 : 0;
-      const animateIn = hasFilteredListChanged;
+    const reportsToAdd = isOnlyAddingReports
+      ? filteredReports.filter((report) => !previousIds.includes(report.id))
+      : filteredReports;
+
+    reportsToAdd.forEach((report, index) => {
+      const delayMs = index * 120;
+      const animateIn = true;
 
       const el = createGooglePinElement({
         category: report.category,
@@ -387,24 +405,29 @@ export default function Map() {
   };
 
   // Add new report submitted from Sheet
-  const handleAddReport = (
+  const handleAddReport = async (
     newReportData: Omit<StreetReport, 'id' | 'createdAt' | 'upvotes' | 'status'>
   ) => {
-    const newReport: StreetReport = {
+    await createMapReport({
+      titulo: newReportData.title,
+      descricao: newReportData.description,
+      categoria: (Object.keys(CATEGORIES) as ReportCategory[]).indexOf(newReportData.category),
+      ponto: newReportData.coordinates,
+      fotoData: newReportData.images,
+    });
+    const createdReport: StreetReport = {
       ...newReportData,
-      id: `rep-${Date.now()}`,
+      id: `pending-${Date.now()}`,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
       status: 'open',
-      upvotes: 1,
+      upvotes: 0,
     };
-
-    setReports((prev) => [newReport, ...prev]);
+    setReports((previous) => [createdReport, ...previous]);
 
     // Animate map fly-to
     if (mapRef.current) {
       mapRef.current.flyTo({
-        center: newReport.coordinates,
+        center: newReportData.coordinates,
         zoom: 15,
         duration: 1200,
         essential: true,
@@ -542,7 +565,7 @@ export default function Map() {
         </div>
       </div>
 
-      {(isOffline || storageError) && (
+      {(isOffline || reportsError) && (
         <div
           role="status"
           aria-live="polite"
@@ -552,7 +575,7 @@ export default function Map() {
           <span>
             {isOffline
               ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
-              : storageError}
+              : reportsError}
           </span>
         </div>
       )}
@@ -676,7 +699,11 @@ export default function Map() {
         </div>
 
         {/* Empty state hint */}
-        {filteredReports.length === 0 && !isMapLoading && !mapError && (
+        {filteredReports.length === 0 &&
+          !isMapLoading &&
+          !isReportsLoading &&
+          !mapError &&
+          !reportsError && (
           <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
             <div className="flex max-w-sm flex-col items-center gap-2 rounded-md border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
               <Info className="size-4 text-amber-500" />
