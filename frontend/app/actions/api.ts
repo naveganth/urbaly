@@ -1,5 +1,6 @@
 'use server';
 
+import http from 'http';
 import https from 'https';
 
 interface ApiResponse {
@@ -8,9 +9,23 @@ interface ApiResponse {
   data: unknown;
 }
 
-function sendRawRequest(path: string, method: string, body?: unknown): Promise<ApiResponse> {
+const PRIMARY_API_BASE_URL =
+  process.env.API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8080/v1/db';
+const FALLBACK_API_BASE_URL = 'https://urbaly.gabrielataide.com/v1/db';
+const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
+
+async function executeRawRequest(
+  baseUrl: string,
+  path: string,
+  method: string,
+  body?: unknown
+): Promise<ApiResponse> {
+  const urlString = `${baseUrl}${path}`;
+
   if (method !== 'GET') {
-    return fetch(`https://urbaly.gabrielataide.com/v1/db${path}`, {
+    return fetch(urlString, {
       method,
       headers: {
         Accept: 'application/json',
@@ -36,39 +51,72 @@ function sendRawRequest(path: string, method: string, body?: unknown): Promise<A
   }
 
   return new Promise((resolve) => {
-    const payload = body === undefined ? undefined : JSON.stringify(body);
-    const req = https.request(
-      `https://urbaly.gabrielataide.com/v1/db${path}`,
-      {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
-        },
-      },
-      (res) => {
-        let responseData = '';
-        res.on('data', (chunk) => (responseData += chunk));
-        res.on('end', () => {
-          let data: unknown = responseData;
-          try {
-            data = JSON.parse(responseData);
-          } catch {
-            // Some endpoints return plain-text success/error messages.
-          }
-          const status = res.statusCode || 500;
-          resolve({ status, ok: status >= 200 && status < 300, data });
-        });
-      }
-    );
+    try {
+      const payload = body === undefined ? undefined : JSON.stringify(body);
+      const parsedUrl = new URL(urlString);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
 
-    req.on('error', (error) => resolve({ status: 500, ok: false, data: error.message }));
-    if (payload) req.write(payload);
-    req.end();
+      const req = client.request(
+        urlString,
+        {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+          },
+        },
+        (res) => {
+          let responseData = '';
+          res.on('data', (chunk) => (responseData += chunk));
+          res.on('end', () => {
+            let data: unknown = responseData;
+            try {
+              data = JSON.parse(responseData);
+            } catch {
+              // Some endpoints return plain-text success/error messages.
+            }
+            const status = res.statusCode || 500;
+            resolve({ status, ok: status >= 200 && status < 300, data });
+          });
+        }
+      );
+
+      req.on('error', (error) => resolve({ status: 500, ok: false, data: error.message }));
+      if (payload) req.write(payload);
+      req.end();
+    } catch (error: unknown) {
+      resolve({
+        status: 500,
+        ok: false,
+        data: error instanceof Error ? error.message : 'Erro ao inicializar requisição.',
+      });
+    }
   });
 }
 
-export interface ApiMapReport {
+function isConnectionError(data: unknown): boolean {
+  if (typeof data !== 'string') return false;
+  return (
+    data.includes('ECONNREFUSED') ||
+    data.includes('fetch failed') ||
+    data.includes('ENOTFOUND') ||
+    data.includes('EAI_AGAIN')
+  );
+}
+
+async function sendRawRequest(path: string, method: string, body?: unknown): Promise<ApiResponse> {
+  const primaryResult = await executeRawRequest(PRIMARY_API_BASE_URL, path, method, body);
+  if (
+    !primaryResult.ok &&
+    PRIMARY_API_BASE_URL !== FALLBACK_API_BASE_URL &&
+    (primaryResult.status === 500 || isConnectionError(primaryResult.data))
+  ) {
+    return executeRawRequest(FALLBACK_API_BASE_URL, path, method, body);
+  }
+  return primaryResult;
+}
+
+export type ApiMapReport = {
   id: number;
   titulo: string;
   descricao?: string;
@@ -78,7 +126,7 @@ export interface ApiMapReport {
   data_atualizacao?: string;
   foto_nome?: string;
   foto_data?: string;
-}
+};
 
 interface ApiMapReportsResponse {
   qtd: number;
@@ -108,6 +156,27 @@ function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
   );
 }
 
+function normalizeImageUrl(source: string): string {
+  if (!source) return '';
+  const trimmed = source.trim();
+  if (
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('/')
+  ) {
+    return trimmed;
+  }
+  if (
+    trimmed.length > 50 &&
+    /^[A-Za-z0-9+/=]+$/.test(trimmed.slice(0, 100)) &&
+    !trimmed.includes(' ')
+  ) {
+    return `data:image/jpeg;base64,${trimmed}`;
+  }
+  return `${REPORT_IMAGE_CDN}/${encodeURIComponent(trimmed)}`;
+}
+
 export async function getMapReports(): Promise<ApiMapReport[]> {
   const response = await sendRawRequest('/reportes/quadro', 'GET', MACAPA_BOUNDS);
   if (!response.ok) {
@@ -123,13 +192,69 @@ export async function getMapReports(): Promise<ApiMapReport[]> {
   return response.data.reportes;
 }
 
+/**
+ * Server Action to fetch images for a specific report ID:
+ * Matches: curl -X GET -H "Content-Type: application/json" http://localhost:8080/v1/db/reporte/imagens -d '{ "id": 52262 }'
+ */
+export async function getReportImages(id: number | string): Promise<string[]> {
+  const numericId = typeof id === 'number' ? id : parseInt(id, 10);
+  if (isNaN(numericId)) return [];
+
+  const response = await sendRawRequest('/reporte/imagens', 'GET', { id: numericId });
+  if (!response.ok || !response.data) {
+    return [];
+  }
+
+  const data = response.data;
+
+  // 1. Array response
+  if (Array.isArray(data)) {
+    return data
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map((item) => normalizeImageUrl(item));
+  }
+
+  // 2. Object response wrapping images
+  if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
+    const imgList = Array.isArray(obj.imagens)
+      ? obj.imagens
+      : Array.isArray(obj.fotos)
+        ? obj.fotos
+        : Array.isArray(obj.images)
+          ? obj.images
+          : null;
+
+    if (imgList) {
+      return imgList
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => normalizeImageUrl(item));
+    }
+
+    if (typeof obj.foto_data === 'string' && obj.foto_data.trim().length > 0) {
+      return [normalizeImageUrl(obj.foto_data)];
+    }
+
+    if (typeof obj.foto_nome === 'string' && obj.foto_nome.trim().length > 0) {
+      return [normalizeImageUrl(obj.foto_nome)];
+    }
+  }
+
+  // 3. String response (single base64 or URL)
+  if (typeof data === 'string' && data.trim().length > 30) {
+    return [normalizeImageUrl(data)];
+  }
+
+  return [];
+}
+
 export async function createMapReport(input: {
   titulo: string;
   descricao: string;
   categoria: number;
   ponto: [number, number];
   fotoData?: string[];
-}) {
+}): Promise<{ id?: number }> {
   const fotoData = input.fotoData?.[0]?.replace(/^data:[^;]+;base64,/, '');
   const response = await sendRawRequest('/reporte', 'POST', {
     titulo: input.titulo,
@@ -137,7 +262,6 @@ export async function createMapReport(input: {
     categoria: input.categoria,
     lon: input.ponto[0],
     lat: input.ponto[1],
-    // The API requires a valid image payload even when the user skips photos.
     foto_data: fotoData || EMPTY_REPORT_IMAGE,
   });
   if (!response.ok) {
@@ -147,6 +271,11 @@ export async function createMapReport(input: {
         : 'Não foi possível enviar o registro.'
     );
   }
+
+  if (typeof response.data === 'object' && response.data !== null && 'id' in response.data) {
+    return { id: Number((response.data as { id: unknown }).id) };
+  }
+  return {};
 }
 
 export async function testPing() {

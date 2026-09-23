@@ -123,3 +123,6 @@ export const CATEGORIES: Record<ReportCategory, CategoryInfo> = {
     description: 'Qualquer outra demanda urbana não listada',
   },
 };
+
+export const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
+

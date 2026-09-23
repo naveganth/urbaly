@@ -12,6 +12,8 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
@@ -23,6 +25,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
+import { getReportImages } from '@/app/actions/api';
 import { CategoryIcon } from './category-icon';
 import { CATEGORIES, StreetReport, ReportStatus } from './types';
 
@@ -66,21 +69,59 @@ export function ReportDetailsDialog({
   const [hasUpvoted, setHasUpvoted] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = React.useState(0);
+  const [loadedImages, setLoadedImages] = React.useState<string[]>([]);
+  const [isLoadingImages, setIsLoadingImages] = React.useState(false);
 
   React.useEffect(() => {
-    // Reset photo index and upvote tracking when report changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // Reset photo index, upvote tracking, and images when report changes.
     setHasUpvoted(false);
     setActivePhotoIndex(0);
+
+    if (!report) {
+      setLoadedImages([]);
+      setIsLoadingImages(false);
+      return;
+    }
+
+    const existingImages =
+      report.images && report.images.length > 0
+        ? report.images
+        : report.imageUrl
+          ? [report.imageUrl]
+          : [];
+
+    setLoadedImages(existingImages);
+
+    // If report has a numeric ID, fetch images via Server Action:
+    // curl -X GET http://localhost:8080/v1/db/reporte/imagens -d '{ "id": 52262 }'
+    const numericId = parseInt(report.id, 10);
+    if (!isNaN(numericId) && numericId > 0) {
+      setIsLoadingImages(existingImages.length === 0);
+      let isMounted = true;
+
+      getReportImages(numericId)
+        .then((fetchedImages) => {
+          if (!isMounted) return;
+          if (fetchedImages && fetchedImages.length > 0) {
+            setLoadedImages(fetchedImages);
+          }
+        })
+        .catch((error) => {
+          console.warn('Erro ao carregar imagens do reporte:', error);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingImages(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setIsLoadingImages(false);
+    }
   }, [report?.id]);
 
   if (!report) return null;
-
-  const allImages = report.images && report.images.length > 0
-    ? report.images
-    : report.imageUrl
-      ? [report.imageUrl]
-      : [];
 
   const categoryInfo = CATEGORIES[report.category] || CATEGORIES.other;
   const statusInfo = STATUS_CONFIG[report.status] || STATUS_CONFIG.open;
@@ -104,11 +145,15 @@ export function ReportDetailsDialog({
   };
 
   const nextPhoto = () => {
-    setActivePhotoIndex((prev) => (prev + 1) % allImages.length);
+    if (loadedImages.length > 0) {
+      setActivePhotoIndex((prev) => (prev + 1) % loadedImages.length);
+    }
   };
 
   const prevPhoto = () => {
-    setActivePhotoIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
+    if (loadedImages.length > 0) {
+      setActivePhotoIndex((prev) => (prev - 1 + loadedImages.length) % loadedImages.length);
+    }
   };
 
   const formattedDate = new Date(report.createdAt).toLocaleDateString('pt-BR', {
@@ -122,12 +167,22 @@ export function ReportDetailsDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg md:max-w-xl p-0 overflow-hidden border border-border bg-card text-card-foreground shadow-2xl rounded-2xl">
+        {/* Loading State for Images */}
+        {isLoadingImages && (
+          <div className="relative w-full h-56 bg-muted/60 flex flex-col items-center justify-center gap-2 border-b border-border/50 animate-pulse">
+            <Loader2 className="size-6 text-muted-foreground animate-spin" />
+            <span className="text-xs text-muted-foreground font-medium">
+              Carregando imagens da ocorrência…
+            </span>
+          </div>
+        )}
+
         {/* Top Image Gallery Carousel */}
-        {allImages.length > 0 && (
+        {!isLoadingImages && loadedImages.length > 0 && (
           <div className="relative w-full h-56 bg-black/40 overflow-hidden group">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={allImages[activePhotoIndex]}
+              src={loadedImages[activePhotoIndex]}
               alt={`${report.title} - Foto ${activePhotoIndex + 1}`}
               className="w-full h-full object-cover transition-all duration-300"
             />
@@ -135,15 +190,15 @@ export function ReportDetailsDialog({
 
             {/* Badges on top */}
             <div className="absolute top-3 left-3 flex items-center gap-2">
-              {allImages.length > 1 && (
+              {loadedImages.length > 1 && (
                 <span className="px-2 py-0.5 rounded-full bg-black/60 text-white text-[11px] font-mono backdrop-blur-md">
-                  {activePhotoIndex + 1} de {allImages.length} fotos
+                  {activePhotoIndex + 1} de {loadedImages.length} fotos
                 </span>
               )}
             </div>
 
             {/* Carousel navigation buttons */}
-            {allImages.length > 1 && (
+            {loadedImages.length > 1 && (
               <>
                 <button
                   type="button"
@@ -164,7 +219,7 @@ export function ReportDetailsDialog({
 
                 {/* Thumbnails row */}
                 <div className="absolute bottom-2 inset-x-0 flex items-center justify-center gap-1.5 px-4">
-                  {allImages.map((_, idx) => (
+                  {loadedImages.map((_, idx) => (
                     <button
                       key={idx}
                       type="button"
@@ -178,6 +233,22 @@ export function ReportDetailsDialog({
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Fallback Banner when No Photos Available */}
+        {!isLoadingImages && loadedImages.length === 0 && (
+          <div className="relative w-full h-24 bg-muted/40 flex items-center px-6 gap-3 border-b border-border/50">
+            <span className={cn('p-2.5 rounded-xl', categoryInfo.bgLight, categoryInfo.color)}>
+              <CategoryIcon category={report.category} className="size-5" />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-foreground">Registro sem fotos anexadas</span>
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <ImageIcon className="size-3" />
+                Localização e detalhes confirmados pelo usuário
+              </span>
+            </div>
           </div>
         )}
 

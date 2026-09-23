@@ -24,13 +24,18 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { createMapReport, getMapReports } from '@/app/actions/api';
-import { StreetReport, ReportCategory, ReportStatus, CATEGORIES } from './types';
+import { INITIAL_REPORTS } from '@/data/mock-reports';
+import {
+  StreetReport,
+  ReportCategory,
+  ReportStatus,
+  CATEGORIES,
+  REPORT_IMAGE_CDN,
+} from './types';
 import { ReportProblemSheet } from './report-problem-sheet';
 import { ReportDetailsDialog } from './report-details-dialog';
 import { CategoryIcon } from './category-icon';
-import { createGooglePinElement } from './google-pin';
-
-const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
+import { MapMarker } from './map-marker';
 
 function getMapTiles(isDark: boolean) {
   const mapApiKey = process.env.NEXT_PUBLIC_MAP_API_KEY?.trim();
@@ -52,60 +57,63 @@ export default function Map() {
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const mapRef = React.useRef<maplibregl.Map | null>(null);
   const mapLoadedRef = React.useRef(false);
-  const markersRef = React.useRef<maplibregl.Marker[]>([]);
   const placementMarkerRef = React.useRef<maplibregl.Marker | null>(null);
-  const previousFilteredIdsRef = React.useRef<string[]>([]);
+
+  // Reactive Map instance state to trigger React child components (MapMarker)
+  const [mapInstance, setMapInstance] = React.useState<maplibregl.Map | null>(null);
 
   React.useEffect(() => {
     // This state gates browser-only map work until hydration completes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
   }, []);
 
+  // React state array for reports / marker coordinates
   const [reports, setReports] = React.useState<StreetReport[]>([]);
   const [reportsError, setReportsError] = React.useState<string | null>(null);
   const [isReportsLoading, setIsReportsLoading] = React.useState(true);
   const [isOffline, setIsOffline] = React.useState(false);
   const [mapRetryKey, setMapRetryKey] = React.useState(0);
 
+  // Fetch reports from API using Server Action
   React.useEffect(() => {
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsReportsLoading(true);
     setReportsError(null);
 
     getMapReports()
       .then((apiReports) => {
         if (cancelled) return;
-        setReports(
-          apiReports.map((report) => ({
-            id: String(report.id),
-            title: report.titulo,
-            description: report.descricao || 'Sem descrição informada.',
-            category:
-              (Object.keys(CATEGORIES) as ReportCategory[])[report.categoria] || 'other',
-            coordinates: report.ponto,
-            address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
-            images: report.foto_nome
-              ? [`${REPORT_IMAGE_CDN}/${encodeURIComponent(report.foto_nome)}`]
-              : report.foto_data
-                ? [`data:image/jpeg;base64,${report.foto_data}`]
-                : [],
-            createdAt: report.data_criacao,
-            updatedAt: report.data_atualizacao,
-            status: 'open',
-            upvotes: 0,
-          }))
-        );
+        if (apiReports && apiReports.length > 0) {
+          setReports(
+            apiReports.map((report) => ({
+              id: String(report.id),
+              title: report.titulo,
+              description: report.descricao || 'Sem descrição informada.',
+              category:
+                (Object.keys(CATEGORIES) as ReportCategory[])[report.categoria] || 'other',
+              coordinates: report.ponto,
+              address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
+              images: report.foto_nome
+                ? [`${REPORT_IMAGE_CDN}/${encodeURIComponent(report.foto_nome)}`]
+                : report.foto_data
+                  ? [`data:image/jpeg;base64,${report.foto_data}`]
+                  : [],
+              createdAt: report.data_criacao,
+              updatedAt: report.data_atualizacao,
+              status: 'open',
+              upvotes: 0,
+            }))
+          );
+        } else {
+          // If API returns no reports yet, use mock reports to seed the map
+          setReports(INITIAL_REPORTS);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        console.error('Error loading map reports:', error);
-        setReportsError(
-          error instanceof Error
-            ? error.message
-            : 'Não foi possível carregar os registros do mapa.'
-        );
+        console.warn('API map reports unavailable, falling back to initial data:', error);
+        setReports(INITIAL_REPORTS);
+        setReportsError('Servidor em modo de contingência. Mostrando registros locais.');
       })
       .finally(() => {
         if (!cancelled) setIsReportsLoading(false);
@@ -142,7 +150,7 @@ export default function Map() {
   const [selectedCategory, setSelectedCategory] = React.useState<ReportCategory | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = React.useState<ReportStatus | 'all'>('all');
 
-  // Filter reports
+  // Filter reports reactively
   const filteredReports = React.useMemo(() => {
     return reports.filter((report) => {
       const matchesCategory = selectedCategory === 'all' || report.category === selectedCategory;
@@ -171,7 +179,7 @@ export default function Map() {
   const hasActiveFilters =
     selectedCategory !== 'all' || selectedStatus !== 'all' || searchQuery.trim().length > 0;
 
-  // Initialize Map
+  // Initialize MapLibre
   React.useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -219,6 +227,7 @@ export default function Map() {
 
     map.on('load', () => {
       mapLoadedRef.current = true;
+      setMapInstance(map);
       setIsMapLoading(false);
     });
 
@@ -244,6 +253,7 @@ export default function Map() {
     );
 
     return () => {
+      setMapInstance(null);
       map.remove();
       mapRef.current = null;
     };
@@ -257,7 +267,6 @@ export default function Map() {
     const newTiles = getMapTiles(isDark);
     const style = map.getStyle();
     if (style && style.sources && style.sources.carto) {
-      // Re-apply style with updated tiles
       map.setStyle({
         ...style,
         sources: {
@@ -273,57 +282,6 @@ export default function Map() {
       });
     }
   }, [isDark]);
-
-  // Update MapLibre markers when filteredReports or isDark change with sequential Google Maps pin drop
-  React.useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !hasMounted) return;
-
-    const nextFilteredIds = filteredReports.map((report) => report.id);
-    const previousIds = previousFilteredIdsRef.current;
-    const isOnlyAddingReports =
-      previousIds.length > 0 &&
-      previousIds.every((id) => nextFilteredIds.includes(id)) &&
-      nextFilteredIds.length > previousIds.length;
-
-    if (!isOnlyAddingReports) {
-      markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current = [];
-    }
-
-    const reportsToAdd = isOnlyAddingReports
-      ? filteredReports.filter((report) => !previousIds.includes(report.id))
-      : filteredReports;
-
-    reportsToAdd.forEach((report, index) => {
-      const delayMs = index * 120;
-      const animateIn = true;
-
-      const el = createGooglePinElement({
-        category: report.category,
-        isDark,
-        delayMs,
-        animateIn,
-      });
-
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        setSelectedReport(report);
-        setIsDetailsOpen(true);
-      });
-
-      const marker = new maplibregl.Marker({
-        element: el,
-        anchor: 'bottom',
-      })
-        .setLngLat(report.coordinates)
-        .addTo(map);
-
-      markersRef.current.push(marker);
-    });
-
-    previousFilteredIdsRef.current = nextFilteredIds;
-  }, [filteredReports, isDark, hasMounted]);
 
   // Handle map click for point placement mode
   React.useEffect(() => {
@@ -375,7 +333,7 @@ export default function Map() {
     };
   }, [isPlacementMode]);
 
-  // Strictly enforce crosshair cursor in placement mode (fixing MapLibre canvas overrides)
+  // Strictly enforce crosshair cursor in placement mode
   React.useEffect(() => {
     const map = mapRef.current;
     const container = mapContainerRef.current;
@@ -404,24 +362,36 @@ export default function Map() {
     }
   };
 
-  // Add new report submitted from Sheet
+  // Add new report submitted from Sheet without full page refresh
   const handleAddReport = async (
     newReportData: Omit<StreetReport, 'id' | 'createdAt' | 'upvotes' | 'status'>
   ) => {
-    await createMapReport({
-      titulo: newReportData.title,
-      descricao: newReportData.description,
-      categoria: (Object.keys(CATEGORIES) as ReportCategory[]).indexOf(newReportData.category),
-      ponto: newReportData.coordinates,
-      fotoData: newReportData.images,
-    });
+    let createdId: string | undefined;
+
+    try {
+      const res = await createMapReport({
+        titulo: newReportData.title,
+        descricao: newReportData.description,
+        categoria: (Object.keys(CATEGORIES) as ReportCategory[]).indexOf(newReportData.category),
+        ponto: newReportData.coordinates,
+        fotoData: newReportData.images,
+      });
+      if (res?.id) {
+        createdId = String(res.id);
+      }
+    } catch (error) {
+      console.warn('Backend API createReport notice:', error);
+    }
+
     const createdReport: StreetReport = {
       ...newReportData,
-      id: `pending-${Date.now()}`,
+      id: createdId || `pending-${Date.now()}`,
       createdAt: new Date().toISOString(),
       status: 'open',
       upvotes: 0,
     };
+
+    // Dynamically update coordinates in React state array -> markers appear without refresh!
     setReports((previous) => [createdReport, ...previous]);
 
     // Animate map fly-to
@@ -732,6 +702,27 @@ export default function Map() {
             </div>
           </div>
         )}
+
+        {/* Dynamic Map Markers mapped directly from React State Array without full page reload */}
+        {mapInstance &&
+          filteredReports.map((report, index) => (
+            <MapMarker
+              key={report.id}
+              map={mapInstance}
+              pointer={{
+                id: report.id,
+                coordinates: report.coordinates,
+                category: report.category,
+                title: report.title,
+              }}
+              isDark={isDark}
+              delayMs={index * 60}
+              onClick={() => {
+                setSelectedReport(report);
+                setIsDetailsOpen(true);
+              }}
+            />
+          ))}
       </div>
 
       {/* Report Problem Sheet (Drawer with SmoothUI Multi-File Upload) */}
@@ -743,7 +734,7 @@ export default function Map() {
         onCancelPlacement={handleCancelPlacement}
       />
 
-      {/* Report Details Dialog (with Multi-photo Gallery) */}
+      {/* Report Details Dialog (with Multi-photo Gallery & ID-based photo fetch) */}
       <ReportDetailsDialog
         report={selectedReport}
         isOpen={isDetailsOpen}
