@@ -7,8 +7,10 @@ import {
   Send,
   CircleAlert,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { compressImageToWebP } from '@/lib/image-compress';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -51,6 +53,7 @@ export function ReportProblemSheet({
   const [description, setDescription] = React.useState('');
   const [images, setImages] = React.useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCompressing, setIsCompressing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [updatedAt] = React.useState(() => new Date());
   const [sheetWidth, setSheetWidth] = React.useState(736);
@@ -78,18 +81,31 @@ export function ReportProblemSheet({
     resizeStartRef.current = null;
   };
 
-  const handleFilesSelected = (files: File[]) => {
+  const handleFilesSelected = async (files: File[]) => {
     if (files.length > 0) {
-      files.forEach((file) => {
-        const reader = new FileReader();
-        reader.addEventListener('load', () => {
-          const result = reader.result;
-          if (typeof result === 'string') {
-            setImages((prev) => [...prev, result]);
-          }
-        });
-        reader.readAsDataURL(file);
-      });
+      setIsCompressing(true);
+      setErrorMessage(null);
+      try {
+        for (const file of files) {
+          const { dataUrl, originalSizeKB, sizeKB } = await compressImageToWebP(file, {
+            maxSizeKB: 280, // strictly under 290KB
+          });
+          console.info(
+            '[Urbaly] Tamanho da imagem antes/depois da compressão:',
+            JSON.stringify({
+              name: file.name,
+              beforeKB: originalSizeKB,
+              afterKB: sizeKB,
+            }),
+          );
+          setImages((prev) => [...prev, dataUrl]);
+        }
+      } catch (err) {
+        console.error('Error compressing image to WebP:', err);
+        setErrorMessage('Não foi possível otimizar a imagem selecionada para WebP.');
+      } finally {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -258,6 +274,14 @@ export function ReportProblemSheet({
                 onFilesSelected={handleFilesSelected}
                 className='border-dashed bg-background/50 hover:bg-muted/40 focus-within:border-primary transition-colors duration-150'
               />
+
+              {/* Compression Indicator */}
+              {isCompressing && (
+                <div className='flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary animate-pulse'>
+                  <Loader2 className='size-3.5 animate-spin' />
+                  <span>Otimizando imagens para WebP (&lt;290KB)...</span>
+                </div>
+              )}
 
               {/* Uploaded Photos Gallery Grid */}
               {images.length > 0 && (
@@ -443,10 +467,15 @@ export function ReportProblemSheet({
                 <Button
                   type='submit'
                   size='default'
-                  disabled={isSubmitting || !coordinates}
+                  disabled={isSubmitting || isCompressing || !coordinates}
                   className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-colors duration-150 active:scale-100! active:translate-y-0! sm:h-8 sm:min-w-38 sm:flex-none'
                 >
-                  {isSubmitting ? (
+                  {isCompressing ? (
+                    <>
+                      <Loader2 className='size-4 animate-spin' />
+                      Otimizando imagens...
+                    </>
+                  ) : isSubmitting ? (
                     <>
                       <span className='size-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent' />
                       Publicando...

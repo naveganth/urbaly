@@ -95,9 +95,7 @@ export default function Map() {
               address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
               images: report.foto_nome
                 ? [`${REPORT_IMAGE_CDN}/${encodeURIComponent(report.foto_nome)}`]
-                : report.foto_data
-                  ? [`data:image/jpeg;base64,${report.foto_data}`]
-                  : [],
+                : report.foto_data?.map((image) => `data:image/jpeg;base64,${image}`) ?? [],
               createdAt: report.data_criacao,
               updatedAt: report.data_atualizacao,
               status: 'open',
@@ -368,20 +366,18 @@ export default function Map() {
   ) => {
     let createdId: string | undefined;
 
-    try {
-      const res = await createMapReport({
-        titulo: newReportData.title,
-        descricao: newReportData.description,
-        categoria: (Object.keys(CATEGORIES) as ReportCategory[]).indexOf(newReportData.category),
-        ponto: newReportData.coordinates,
-        fotoData: newReportData.images,
-      });
-      if (res?.id) {
-        createdId = String(res.id);
-      }
-    } catch (error) {
-      console.warn('Backend API createReport notice:', error);
+    const res = await createMapReport({
+      titulo: newReportData.title,
+      descricao: newReportData.description,
+      categoria: (Object.keys(CATEGORIES) as ReportCategory[]).indexOf(newReportData.category),
+      ponto: newReportData.coordinates,
+      fotoData: newReportData.images,
+    });
+
+    if (res.success && res.id) {
+      createdId = String(res.id);
     }
+    // If !res.success the marker still appears optimistically; the API issue is logged server-side.
 
     const createdReport: StreetReport = {
       ...newReportData,

@@ -125,7 +125,7 @@ export type ApiMapReport = {
   data_criacao: string;
   data_atualizacao?: string;
   foto_nome?: string;
-  foto_data?: string;
+  foto_data?: string[];
 };
 
 interface ApiMapReportsResponse {
@@ -135,7 +135,7 @@ interface ApiMapReportsResponse {
 
 const MACAPA_BOUNDS: [number, number, number, number] = [-51.2, -0.1, -50.9, 0.2];
 const EMPTY_REPORT_IMAGE =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  'UklGRkoAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAwAAAARBxAR/Q9ERP8DAABWUDggGAAAABQBAJ0BKgEAAQAAAP4AAA3AAP7mtQAAAA==';
 
 function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
   if (!data || typeof data !== 'object') return false;
@@ -151,7 +151,9 @@ function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
         Array.isArray(report.ponto) &&
         report.ponto.length === 2 &&
         (report.foto_nome === undefined || typeof report.foto_nome === 'string') &&
-        (report.foto_data === undefined || typeof report.foto_data === 'string')
+        (report.foto_data === undefined ||
+          (Array.isArray(report.foto_data) &&
+            report.foto_data.every((image) => typeof image === 'string')))
     )
   );
 }
@@ -231,6 +233,12 @@ export async function getReportImages(id: number | string): Promise<string[]> {
         .map((item) => normalizeImageUrl(item));
     }
 
+    if (Array.isArray(obj.foto_data)) {
+      return obj.foto_data
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => normalizeImageUrl(item));
+    }
+
     if (typeof obj.foto_data === 'string' && obj.foto_data.trim().length > 0) {
       return [normalizeImageUrl(obj.foto_data)];
     }
@@ -254,28 +262,63 @@ export async function createMapReport(input: {
   categoria: number;
   ponto: [number, number];
   fotoData?: string[];
-}): Promise<{ id?: number }> {
-  const fotoData = input.fotoData?.[0]?.replace(/^data:[^;]+;base64,/, '');
-  const response = await sendRawRequest('/reporte', 'POST', {
+}): Promise<{ id?: number; success: boolean; error?: string }> {
+  const fotoData = input.fotoData?.length
+    ? input.fotoData.map((image) => image.replace(/^data:[^;]+;base64,/, ''))
+    : [EMPTY_REPORT_IMAGE];
+
+  const payload = {
     titulo: input.titulo,
     descricao: input.descricao,
     categoria: input.categoria,
     lon: input.ponto[0],
     lat: input.ponto[1],
-    foto_data: fotoData || EMPTY_REPORT_IMAGE,
-  });
+    foto_data: fotoData,
+  };
+  console.info(
+    '[Urbaly] JSON do reporte criado:',
+    JSON.stringify({
+      ...payload,
+      foto_data: fotoData.map((image) => ({ sizeKB: Math.round((image.length * 3) / 4 / 1024) })),
+    }),
+  );
+
+  const response = await sendRawRequest('/reporte', 'POST', payload);
+
   if (!response.ok) {
-    throw new Error(
+    const errorMsg =
       typeof response.data === 'string'
         ? response.data
-        : 'Não foi possível enviar o registro.'
-    );
+        : 'Não foi possível enviar o registro para o servidor.';
+    console.warn('Backend API createReport notice:', errorMsg);
+    return { success: false, error: errorMsg };
   }
 
   if (typeof response.data === 'object' && response.data !== null && 'id' in response.data) {
-    return { id: Number((response.data as { id: unknown }).id) };
+    console.info(
+      '[Urbaly] Resposta do reporte criado:',
+      JSON.stringify(response.data),
+    );
+    return { success: true, id: Number((response.data as { id: unknown }).id) };
   }
-  return {};
+  console.info('[Urbaly] Resposta do reporte criado:', JSON.stringify(response.data));
+  return { success: true };
+}
+
+export async function deleteMapReport(id: number | string) {
+  const numericId = typeof id === 'number' ? id : parseInt(id, 10);
+  if (isNaN(numericId)) {
+    throw new Error('ID de reporte inválido.');
+  }
+
+  const payload = { id: numericId };
+  console.info('[Urbaly] JSON do reporte excluído:', JSON.stringify(payload));
+  const response = await sendRawRequest('/reporte', 'DELETE', payload);
+  console.info(
+    '[Urbaly] Resposta do reporte excluído:',
+    JSON.stringify(response.data),
+  );
+  return response;
 }
 
 export async function testPing() {
@@ -312,8 +355,9 @@ export async function testCriarReporte() {
     categoria: 0,
     lon: -52.0,
     lat: 0.0,
-    foto_data:
+    foto_data: [
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    ],
   });
 }
 
@@ -326,5 +370,5 @@ export async function testAtualizarReporte() {
 }
 
 export async function testDeletarReporte() {
-  return sendRawRequest('/reporte', 'DELETE', { id: 52196 });
+  return deleteMapReport(52196);
 }
