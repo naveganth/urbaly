@@ -14,16 +14,37 @@ export function MapLayout({
   children,
   containerClassName,
   contentClassName,
+  intent = "inset",
   ...navbarProps
 }: MapLayoutProps) {
-  return (
-    <div className={cn("min-h-screen w-full bg-background flex flex-col", containerClassName)}>
-      <Navbar {...navbarProps} />
+  const isInset = intent === "inset"
 
-      <main className="flex-1 w-full px-3 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6 flex flex-col">
+  return (
+    <div
+      className={cn(
+        "peer/navbar group/navbar relative isolate z-10 flex min-h-svh w-full flex-col",
+        isInset && "bg-sidebar dark:bg-background",
+        !isInset && "bg-background",
+        containerClassName
+      )}
+    >
+      <Navbar intent={intent} {...navbarProps} />
+
+      <main
+        data-navbar-inset={isInset || undefined}
+        className={cn(
+          "flex flex-1 flex-col",
+          isInset
+            ? "bg-sidebar pb-2 md:px-2 dark:bg-background"
+            : "w-full px-3 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6"
+        )}
+      >
         <div
           className={cn(
-            "page-transition flex-1 w-full rounded-md border border-border bg-card text-card-foreground shadow-xs p-6 sm:p-8 md:p-10 transition-colors",
+            "page-transition flex min-h-0 flex-1 flex-col",
+            isInset
+              ? "grow bg-background p-6 text-foreground shadow-xs md:rounded-lg md:p-10 md:ring-1 md:ring-foreground/5 dark:bg-card dark:md:ring-foreground/10"
+              : "w-full rounded-md border border-border bg-card p-6 text-card-foreground shadow-xs transition-colors sm:p-8 md:p-10",
             contentClassName
           )}
         >

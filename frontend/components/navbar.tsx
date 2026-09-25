@@ -36,12 +36,14 @@ export interface NavbarProps {
   activeTab?: string
   onSelectTab?: (tab: string) => void
   className?: string
+  intent?: "default" | "inset"
 }
 
 export function Navbar({
   activeTab,
   onSelectTab,
   className,
+  intent = "default",
 }: NavbarProps) {
   const pathname = usePathname()
   const { resolvedTheme, setTheme } = useTheme()
@@ -54,9 +56,25 @@ export function Navbar({
   const isLinkActive = (href: string, label: string) =>
     activeTab ? activeTab === label : pathname === href
 
+  const isInset = intent === "inset"
+
   return (
-    <header className={cn("w-full bg-background border-b border-border", className)}>
-      <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
+    <header
+      data-navbar={intent}
+      className={cn(
+        "relative isolate w-full",
+        isInset
+          ? "bg-sidebar px-4 dark:bg-background"
+          : "border-b border-border bg-background",
+        className
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-14 items-center justify-between",
+          isInset ? "mx-auto w-full max-w-screen-2xl" : "px-4 sm:px-6 lg:px-8"
+        )}
+      >
         <div className="flex items-center gap-6 sm:gap-8">
           <Link href="/" className="flex items-center">
             <Image
