@@ -137,6 +137,21 @@ const MACAPA_BOUNDS: [number, number, number, number] = [-51.2, -0.1, -50.9, 0.2
 const EMPTY_REPORT_IMAGE =
   'UklGRkoAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAwAAAARBxAR/Q9ERP8DAABWUDggGAAAABQBAJ0BKgEAAQAAAP4AAA3AAP7mtQAAAA==';
 
+function getWebpBase64(image: string): string {
+  const trimmed = image.trim();
+  const dataUrlMatch = trimmed.match(/^data:image\/webp;base64,(.+)$/i);
+
+  if (dataUrlMatch) {
+    return dataUrlMatch[1];
+  }
+
+  if (/^data:image\//i.test(trimmed)) {
+    throw new Error('A API aceita apenas imagens convertidas para WebP.');
+  }
+
+  throw new Error('A imagem precisa ser enviada como uma data URL WebP.');
+}
+
 function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
   if (!data || typeof data !== 'object') return false;
   const response = data as Partial<ApiMapReportsResponse>;
@@ -263,9 +278,17 @@ export async function createMapReport(input: {
   ponto: [number, number];
   fotoData?: string[];
 }): Promise<{ id?: number; success: boolean; error?: string }> {
-  const fotoData = input.fotoData?.length
-    ? input.fotoData.map((image) => image.replace(/^data:[^;]+;base64,/, ''))
-    : [EMPTY_REPORT_IMAGE];
+  let fotoData: string[];
+  try {
+    fotoData = input.fotoData?.length
+      ? input.fotoData.map(getWebpBase64)
+      : [EMPTY_REPORT_IMAGE];
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'A imagem precisa estar no formato WebP.',
+    };
+  }
 
   const payload = {
     titulo: input.titulo,

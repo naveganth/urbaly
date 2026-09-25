@@ -95,7 +95,7 @@ export default function Map() {
               address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
               images: report.foto_nome
                 ? [`${REPORT_IMAGE_CDN}/${encodeURIComponent(report.foto_nome)}`]
-                : report.foto_data?.map((image) => `data:image/jpeg;base64,${image}`) ?? [],
+                : report.foto_data?.map((image) => `data:image/webp;base64,${image}`) ?? [],
               createdAt: report.data_criacao,
               updatedAt: report.data_atualizacao,
               status: 'open',
@@ -377,7 +377,9 @@ export default function Map() {
     if (res.success && res.id) {
       createdId = String(res.id);
     }
-    // If !res.success the marker still appears optimistically; the API issue is logged server-side.
+    if (!res.success) {
+      throw new Error(res.error || 'Não foi possível enviar o reporte.');
+    }
 
     const createdReport: StreetReport = {
       ...newReportData,

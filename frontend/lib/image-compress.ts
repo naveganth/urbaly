@@ -118,7 +118,14 @@ export async function compressImageToWebP(
       });
     }
 
+    if (compressedFile.type !== 'image/webp') {
+      throw new Error('A compressão não retornou uma imagem WebP.');
+    }
+
     const dataUrl = await fileToDataUrl(compressedFile);
+    if (!dataUrl.startsWith('data:image/webp;base64,')) {
+      throw new Error('A imagem comprimida não está no formato WebP.');
+    }
     const sizeKB = Math.round(compressedFile.size / 1024);
 
     return { dataUrl, sizeKB, originalSizeKB };
