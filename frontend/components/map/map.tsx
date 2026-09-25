@@ -416,7 +416,7 @@ export default function Map() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-2 ">
+   <div className="flex h-dvh w-full flex-col gap-2 overflow-hidden">
       {/* Top Floating Control Bar */}
       <div className="flex flex-col rounded-md backdrop-blur-sm md:flex-row md:items-center md:justify-between">
         {/* Search & Status Filter */}
@@ -589,13 +589,13 @@ export default function Map() {
       </div>
 
       {/* Interactive Map Container */}
-      <div
+        <div
         ref={mapContainerRef}
         className={cn(
-          'relative h-[clamp(24rem,68dvh,40rem)] min-h-96 w-full overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow] md:min-h-120',
+          'relative w-full flex-1 min-h-0 overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow]',
           isPlacementMode && 'placement-mode-active'
         )}
-      >
+>
         {isMapLoading && !mapError && (
           <div
             role="status"

@@ -22,7 +22,7 @@ export function MapLayout({
   return (
     <div
       className={cn(
-        "peer/navbar group/navbar relative isolate z-10 flex min-h-svh w-full flex-col",
+        "peer/navbar group/navbar relative isolate z-10 flex h-svh w-full flex-col",
         isInset && "bg-sidebar dark:bg-background",
         !isInset && "bg-background",
         containerClassName
@@ -33,7 +33,7 @@ export function MapLayout({
       <main
         data-navbar-inset={isInset || undefined}
         className={cn(
-          "flex flex-1 flex-col",
+          "flex min-h-0 flex-1 flex-col overflow-hidden",
           isInset
             ? "bg-sidebar pb-2 md:px-2 dark:bg-background"
             : "w-full px-3 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6"

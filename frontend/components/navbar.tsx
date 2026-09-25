@@ -64,15 +64,15 @@ export function Navbar({
       className={cn(
         "relative isolate w-full",
         isInset
-          ? "bg-sidebar px-4 dark:bg-background"
+          ? "bg-sidebar md:px-2 dark:bg-background"
           : "border-b border-border bg-background",
         className
       )}
     >
       <div
         className={cn(
-          "flex h-14 items-center justify-between",
-          isInset ? "mx-auto w-full max-w-screen-2xl" : "px-4 sm:px-6 lg:px-8"
+          "flex h-14 w-full items-center justify-between",
+          !isInset && "px-4 sm:px-6 lg:px-8"
         )}
       >
         <div className="flex items-center gap-6 sm:gap-8">
