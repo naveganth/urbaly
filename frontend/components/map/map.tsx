@@ -592,7 +592,7 @@ export default function Map() {
       <div
         ref={mapContainerRef}
         className={cn(
-          'relative h-[clamp(24rem,68dvh,40rem)] min-h-96 w-full overflow-hidden rounded-md border border-border/70 bg-muted shadow-lg shadow-foreground/5 transition-[border-color,box-shadow] md:min-h-120',
+          'relative h-[clamp(24rem,68dvh,40rem)] min-h-96 w-full overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow] md:min-h-120',
           isPlacementMode && 'placement-mode-active'
         )}
       >
