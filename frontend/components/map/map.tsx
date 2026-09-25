@@ -416,9 +416,9 @@ export default function Map() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="flex w-full flex-col gap-2 ">
       {/* Top Floating Control Bar */}
-      <div className="flex flex-col gap-3 rounded-md border border-border/70 bg-card/95 p-3 shadow-sm backdrop-blur-sm md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col rounded-md backdrop-blur-sm md:flex-row md:items-center md:justify-between">
         {/* Search & Status Filter */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="relative min-w-0 flex-1 md:max-w-md">

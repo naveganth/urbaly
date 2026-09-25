@@ -43,7 +43,7 @@ export function MapLayout({
           className={cn(
             "page-transition flex min-h-0 flex-1 flex-col",
             isInset
-              ? "grow bg-background text-foreground  md:rounded-lg md:ring-1 md:ring-foreground/5 dark:bg-card dark:md:ring-foreground/10"
+              ? "grow bg-background text-foreground md:rounded-lg md:ring-1 md:ring-foreground/5 dark:bg-card dark:md:ring-foreground/10"
               : "w-full rounded-md border border-border bg-card p-6 text-card-foreground shadow-xs transition-colors sm:p-8 md:p-10",
             contentClassName
           )}
