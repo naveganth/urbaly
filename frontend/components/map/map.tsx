@@ -37,16 +37,20 @@ import { ReportDetailsDialog } from './report-details-dialog';
 import { CategoryIcon } from './category-icon';
 import { MapMarker } from './map-marker';
 
-function getMapTiles(isDark: boolean) {
-  const mapApiKey = process.env.NEXT_PUBLIC_MAP_API_KEY?.trim();
-  const themeVariant = isDark ? 'dark_all' : 'light_all';
-  const tileUrl = `https://a.basemaps.cartocdn.com/${themeVariant}/{z}/{x}/{y}@2x.png`;
+function getCartoApiKey() {
+  return (
+    process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_MAP_API_KEY?.trim() ||
+    ''
+  );
+}
 
-  if (mapApiKey) {
-    return `${tileUrl}?key=${mapApiKey}`;
-  }
-
-  return tileUrl;
+function getCartoVectorStyle(isDark: boolean) {
+  const base = isDark
+    ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+    : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+  const apiKey = getCartoApiKey();
+  return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
 }
 
 export default function Map() {
@@ -177,65 +181,109 @@ export default function Map() {
   const hasActiveFilters =
     selectedCategory !== 'all' || selectedStatus !== 'all' || searchQuery.trim().length > 0;
 
-  // Initialize MapLibre
+  // Last vector style URL applied to the map. Compared inside effects so the
+  // theme effect never re-applies the style the map was just constructed with.
+  const appliedStyleRef = React.useRef<string | null>(null);
+  // Safety-net timer so the UI can never spin forever: cleared on load/error.
+  const loadTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Initialize MapLibre (once per retry; theme switches go through setStyle below).
   React.useEffect(() => {
     if (!mapContainerRef.current) return;
 
     mapLoadedRef.current = false;
     setIsMapLoading(true);
     setMapError(null);
-    const initialTiles = getMapTiles(isDark);
+    const apiKey = getCartoApiKey();
+    if (!apiKey) {
+      console.warn(
+        '[Urbaly Map] NEXT_PUBLIC_CARTO_API_KEY is missing. ' +
+          'Restart `next dev` after creating frontend/.env.local. ' +
+          'Falling back to the keyless CARTO style.'
+      );
+    }
+    // NOTE: isDark is intentionally read once here; live theme switches are
+    // handled by the [isDark] effect via map.setStyle.
+    const initialStyle = getCartoVectorStyle(isDark);
+    appliedStyleRef.current = initialStyle;
 
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: {
-        version: 8,
-        name: isDark ? 'Urbaly Dark' : 'Urbaly Light',
-        metadata: {
-          'mapbox:autocomposite': true,
+    const clearLoadTimeout = () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+    };
+    clearLoadTimeout();
+
+    // Self-hosted worker: Next.js/Turbopack rewrites import.meta.url, so
+    // MapLibre's default worker resolution returns '' and `new Worker('')`
+    // resolves to the page URL (blocked as MIME mismatch). public/maplibre/
+    // is populated by scripts/copy-maplibre-worker.mjs (postinstall).
+    // Same-origin => loaded directly as a module worker.
+    maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
+
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: initialStyle,
+        transformRequest: (url: string) => {
+          // Propagate the CARTO API key to every vector tile asset
+          // (tiles.json, .mvt, sprites, glyphs) that the style.json references
+          // without an embedded key.
+          if (apiKey && url.includes('basemaps.cartocdn.com') && !/[?&]key=/.test(url)) {
+            const separator = url.includes('?') ? '&' : '?';
+            return { url: `${url}${separator}key=${encodeURIComponent(apiKey)}` };
+          }
+          return { url };
         },
-        glyphs: 'https://demotile.maplibre.org/font/{fontstack}/{range}.pbf',
-        sources: {
-          carto: {
-            type: 'raster',
-            tiles: [initialTiles],
-            tileSize: 256,
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          },
-        },
-        layers: [
-          {
-            id: 'base-raster',
-            type: 'raster',
-            source: 'carto',
-            paint: {
-              'raster-opacity': 1,
-            },
-          },
-        ],
-      },
-      center: [-51.065, 0.035],
-      zoom: 13,
-      maxZoom: 18,
-      minZoom: 9,
-    });
+        center: [-51.065, 0.035],
+        zoom: 13,
+        maxZoom: 18,
+        minZoom: 9,
+      });
+    } catch (constructionError) {
+      console.error('[Urbaly Map] Failed to construct the map:', constructionError);
+      // Deferred so this stays out of the synchronous effect body.
+      queueMicrotask(() => {
+        setIsMapLoading(false);
+        setMapError(
+          'O mapa não pôde ser inicializado neste navegador (WebGL indisponível?). Tente outro navegador.'
+        );
+      });
+      return;
+    }
 
     mapRef.current = map;
 
     map.on('load', () => {
       mapLoadedRef.current = true;
+      clearLoadTimeout();
       setMapInstance(map);
       setIsMapLoading(false);
     });
 
     map.on('error', (event) => {
-      console.error('MapLibre error:', event.error || 'Unknown map error');
+      console.error('[Urbaly Map] MapLibre error:', event.error || 'Unknown map error');
+      clearLoadTimeout();
       if (!mapLoadedRef.current) {
         setIsMapLoading(false);
         setMapError('O mapa não pôde ser carregado. Verifique sua conexão e tente novamente.');
       }
     });
+
+    // Safety net: if neither 'load' nor 'error' fires (hung request, blocked
+    // CDN, stalled style), stop spinning and offer a retry instead.
+    loadTimeoutRef.current = setTimeout(() => {
+      if (!mapLoadedRef.current) {
+        console.error(
+          '[Urbaly Map] Style load timed out after 20s. ' +
+            `Style: ${initialStyle.split('?')[0]} | key present: ${apiKey ? 'yes' : 'no'}`
+        );
+        setIsMapLoading(false);
+        setMapError('O mapa demorou demais para carregar. Verifique sua conexão e tente novamente.');
+      }
+    }, 20000);
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.addControl(
@@ -251,34 +299,27 @@ export default function Map() {
     );
 
     return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
       setMapInstance(null);
       map.remove();
       mapRef.current = null;
     };
-  }, [isDark, mapRetryKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapRetryKey]);
 
-  // Update map tile theme on dark mode change
+  // Update vector basemap style on dark mode change without recreating the map.
+  // DOM markers (MapMarker / placement pin) survive setStyle, so no state is lost.
+  // Works before 'load' too: setStyle simply swaps the pending style request.
   React.useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    const newTiles = getMapTiles(isDark);
-    const style = map.getStyle();
-    if (style && style.sources && style.sources.carto) {
-      map.setStyle({
-        ...style,
-        sources: {
-          ...style.sources,
-          carto: {
-            type: 'raster',
-            tiles: [newTiles],
-            tileSize: 256,
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          },
-        },
-      });
-    }
+    const nextStyle = getCartoVectorStyle(isDark);
+    if (appliedStyleRef.current === nextStyle) return;
+    appliedStyleRef.current = nextStyle;
+    map.setStyle(nextStyle);
   }, [isDark]);
 
   // Handle map click for point placement mode
