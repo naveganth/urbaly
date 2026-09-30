@@ -7,6 +7,16 @@ import type { StreetReport } from './types';
 const IMAGE_CACHE = new Map<string, string[]>();
 const PRELOAD_TIMEOUT_MS = 8000;
 
+/** Read-through access to the shared report image cache (also fed by zoom prefetch). */
+export function peekCachedReportImages(reportId: string): string[] | undefined {
+  return IMAGE_CACHE.get(reportId);
+}
+
+/** Store images in the shared cache so markers and the details panel reuse them. */
+export function storeCachedReportImages(reportId: string, images: string[]): void {
+  IMAGE_CACHE.set(reportId, images);
+}
+
 function getInitialImages(report: StreetReport | null): string[] {
   if (!report) return [];
   if (report.images && report.images.length > 0) return report.images;

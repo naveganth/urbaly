@@ -107,6 +107,160 @@
   will-change: transform, opacity;
 }
 
+@keyframes photo-pin-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(8px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) translateY(-1px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-photo-pin {
+  animation: photo-pin-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+/* Seamless pin <-> photo choreography (SmoothUI tokens: EASE_OUT
+   cubic-bezier(0.23, 1, 0.32, 1) for recedes, a soft overshoot spring for
+   entrances). Both layers share the marker anchor point (transform-origin
+   bottom center), so each state blooms upward from the map point instead of
+   fading symmetrically in place.
+   Direction:
+   - photo -> pin: the circle collapses fast into the anchor while the pin
+     waits 70ms, then expands with a gentle overshoot — the "expanding pin".
+   - pin -> photo: mirrored — pin retracts fast, circle blooms in.
+   The hidden layer is visibility-collapsed (hide-after-fade) so it can never
+   intercept clicks or hover mid-transition. */
+.adaptive-marker .marker-pin-layer,
+.adaptive-marker .marker-photo-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+}
+
+/* PIN ENTER (returning from photo): wait for the circle to recede, then
+   bloom open from the anchor with a soft single overshoot. */
+.adaptive-marker .marker-pin-layer {
+  transition:
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1) 70ms,
+    transform 360ms cubic-bezier(0.34, 1.22, 0.64, 1) 70ms,
+    visibility 0s;
+}
+
+/* PIN EXIT (going to photo): retract quickly into the anchor. */
+.adaptive-marker.is-photo .marker-pin-layer {
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.55) translateY(10px);
+  pointer-events: none;
+  transition:
+    opacity 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 190ms cubic-bezier(0.23, 1, 0.32, 1),
+    visibility 0s linear 170ms;
+}
+
+/* PHOTO EXIT (returning to pin): collapse fast into the anchor point. */
+.adaptive-marker .marker-photo-layer {
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.6);
+  pointer-events: none;
+  transition:
+    opacity 170ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 210ms cubic-bezier(0.23, 1, 0.32, 1),
+    visibility 0s linear 190ms;
+}
+
+/* PHOTO ENTER (going to photo): bloom open once the pin starts retracting. */
+.adaptive-marker.is-photo .marker-photo-layer {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  pointer-events: auto;
+  transition:
+    opacity 220ms cubic-bezier(0.23, 1, 0.32, 1) 30ms,
+    transform 340ms cubic-bezier(0.34, 1.28, 0.64, 1) 30ms,
+    visibility 0s;
+}
+
+/* CDN thumbnails fade in over the category-icon fallback disc on decode,
+   including images assigned after mount by the zoom prefetch. */
+.marker-photo-img {
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+
+.marker-photo-img.is-loaded {
+  opacity: 1;
+}
+
+/* Skeleton shimmer for loading thumbnails (shadcn skeleton language: muted
+   base + light sweep, paused unless visible). Shown while a thumbnail URL is
+   being fetched (`.is-loading` on the marker, no src yet) or while an
+   assigned src is still decoding (`img[src]:not(.is-loaded)` sibling rule).
+   Clipped to the circle / rounded thumb by the overflow-hidden parent. */
+.marker-photo-shimmer {
+  opacity: 0;
+  background-color: var(--muted);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: photo-shimmer-sweep 1.3s linear infinite paused;
+  transition: opacity 200ms ease-out;
+}
+
+.dark .marker-photo-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 70%
+  );
+}
+
+img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-shimmer,
+.adaptive-marker.is-loading .marker-photo-shimmer {
+  opacity: 1;
+  animation-play-state: running;
+}
+
+@keyframes photo-shimmer-sweep {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+/* Hovered / focused photo pins float above neighbours so the
+   shadcn hover card never clips behind adjacent markers. */
+.adaptive-marker:hover,
+.adaptive-marker:focus-visible {
+  z-index: 50;
+}
+
+.report-photo-container:hover,
+.report-photo-container:focus-visible {
+  z-index: 50;
+}
+
 .map-placement-marker {
   position: relative;
   display: flex;
@@ -139,8 +293,24 @@
 
   .animate-google-pin,
   .animate-google-shadow,
-  .map-placement-marker {
+  .animate-photo-pin,
+  .map-placement-marker,
+  .adaptive-marker .marker-pin-layer,
+  .adaptive-marker .marker-photo-layer,
+  .marker-photo-img {
     animation-duration: 1ms;
+    transition: none;
+  }
+
+  .marker-photo-shimmer {
+    animation: none;
+    opacity: 0;
+  }
+
+  img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-shimmer,
+  .adaptive-marker.is-loading .marker-photo-shimmer {
+    animation: none;
+    opacity: 1;
   }
 }
 
