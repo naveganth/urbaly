@@ -48,14 +48,28 @@ export function useGatedReportImages(report: StreetReport | null): GatedReportIm
   const [storedImages, setImages] = React.useState<string[]>(() => getInitialImages(report));
   const [storedReady, setIsReady] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
+  const [selectionId, setSelectionId] = React.useState<string | null>(report?.id ?? null);
   const requestIdRef = React.useRef(0);
 
-  // Reports already fully loaded on the client (cache entries are only
-  // written after preload completes) reveal instantly: derived during render
-  // so there is zero loader flash, with the effect below syncing state.
-  const cachedImages = report ? IMAGE_CACHE.get(report.id) : undefined;
-  const images = cachedImages ?? storedImages;
-  const isReady = cachedImages !== undefined ? true : storedReady;
+  // Selection changed: synchronously drop the previous report's images and
+  // readiness during render, so stale content can never paint under the new
+  // selection (e.g. report A's photos flashing on report B when clicked in
+  // succession). Cached reports (fully preloaded) resolve instantly here with
+  // no loader at all.
+  const currentId = report?.id ?? null;
+  if (currentId !== selectionId) {
+    setSelectionId(currentId);
+    const cached = report ? IMAGE_CACHE.get(report.id) : undefined;
+    if (cached) {
+      setImages(cached);
+      setIsReady(true);
+      setProgress(100);
+    } else {
+      setImages(getInitialImages(report));
+      setIsReady(false);
+      setProgress(0);
+    }
+  }
 
   React.useEffect(() => {
     const requestId = requestIdRef.current + 1;
@@ -98,31 +112,16 @@ export function useGatedReportImages(report: StreetReport | null): GatedReportIm
       });
     };
 
-    // Single deferred bootstrap so reset-then-load always apply in order:
-    // the reset can never clobber a later load (e.g. a cache hit on reopen),
-    // and everything stays out of the synchronous effect body.
+    // Deferred load for the new selection only. Reset (and cache-hit
+    // resolve) already happened synchronously during render above, so this
+    // only kicks off fetching and stays out of the synchronous effect body.
     queueMicrotask(() => {
       if (!isCurrent()) return;
 
-      if (!report) {
-        setImages([]);
-        setIsReady(false);
-        setProgress(0);
-        return;
-      }
-
-      // Cache hit: already fully loaded, sync state and reveal with no loader.
-      const cached = IMAGE_CACHE.get(report.id);
-      if (cached) {
-        setImages(cached);
-        setIsReady(true);
-        setProgress(100);
-        return;
-      }
+      // Deselected or cache-hit: already resolved during render, nothing to do.
+      if (!report || IMAGE_CACHE.has(report.id)) return;
 
       const initial = getInitialImages(report);
-      setImages(initial);
-      setIsReady(false);
       setProgress(initial.length > 0 ? 20 : 5);
 
       const numericId = parseInt(report.id, 10);
@@ -151,5 +150,5 @@ export function useGatedReportImages(report: StreetReport | null): GatedReportIm
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report?.id]);
 
-  return { images, isReady, progress };
+  return { images: storedImages, isReady: storedReady, progress };
 }
