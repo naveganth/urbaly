@@ -11,6 +11,7 @@ import {
   Crosshair,
   SlidersHorizontal,
   Info,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
@@ -24,6 +25,7 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { createMapReport, getMapReports } from '@/app/actions/api';
+import { AnimatePresence } from 'motion/react';
 import { INITIAL_REPORTS } from '@/data/mock-reports';
 import {
   StreetReport,
@@ -33,7 +35,8 @@ import {
   REPORT_IMAGE_CDN,
 } from './types';
 import { ReportProblemSheet } from './report-problem-sheet';
-import { ReportDetailsDialog } from './report-details-dialog';
+import { ReportDetailsPanel } from './report-details-panel';
+import { useGatedReportImages } from './use-report-images';
 import { CategoryIcon } from './category-icon';
 import { MapMarker } from './map-marker';
 
@@ -143,7 +146,8 @@ export default function Map() {
   const [placementCoordinates, setPlacementCoordinates] = React.useState<[number, number] | null>(null);
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [selectedReport, setSelectedReport] = React.useState<StreetReport | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
+  const { images: gatedImages, isReady: isDetailsReady } = useGatedReportImages(selectedReport);
+  const isDetailsLoading = selectedReport !== null && !isDetailsReady;
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
 
@@ -362,6 +366,14 @@ export default function Map() {
 
         // Open reporting sheet
         setIsSheetOpen(true);
+      } else {
+        // Maps-like dismiss: clicking empty map closes the details panel.
+        // Marker clicks stop propagation on their own element, and we
+        // double-guard here so a marker click never dismisses the panel.
+        const target = e.originalEvent?.target as HTMLElement | null;
+        if (!target?.closest?.('.maplibregl-marker')) {
+          setSelectedReport(null);
+        }
       }
     };
 
@@ -400,6 +412,27 @@ export default function Map() {
       placementMarkerRef.current = null;
     }
   };
+
+  // Google Maps-like: keep the selected pin visible once the panel reveals,
+  // offsetting for the floating card instead of centering under it.
+  // Intentionally keyed on id + readiness so upvote count changes don't re-pan.
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedReport || !isDetailsReady) return;
+    try {
+      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+      map.easeTo({
+        center: selectedReport.coordinates,
+        duration: 600,
+        padding: isDesktop
+          ? { top: 60, bottom: 60, left: 440, right: 60 }
+          : { top: 60, bottom: 320, left: 20, right: 20 },
+      });
+    } catch {
+      // Padding-aware pan is a nicety; never break selection if it fails.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReport?.id, isDetailsReady]);
 
   // Add new report submitted from Sheet without full page refresh
   const handleAddReport = async (
@@ -463,22 +496,33 @@ export default function Map() {
         {/* Search & Status Filter */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="relative min-w-0 flex-1 md:max-w-md">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            {isDetailsLoading ? (
+              <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-primary" />
+            ) : (
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            )}
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por rua, bairro ou problema..."
+              placeholder={isDetailsLoading ? 'Carregando ocorrência…' : 'Buscar por rua, bairro ou problema...'}
+              aria-busy={isDetailsLoading}
               className="h-11 rounded-md border-border/70 bg-background/80 pl-9 text-sm shadow-none transition-[border-color,box-shadow] focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15"
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                aria-label="Limpar busca"
-              >
-                <X className="size-4" />
-              </button>
+            {isDetailsLoading ? (
+              <span role="status" aria-live="polite" className="sr-only">
+                Carregando ocorrência
+              </span>
+            ) : (
+              searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="Limpar busca"
+                >
+                  <X className="size-4" />
+                </button>
+              )
             )}
           </div>
 
@@ -757,11 +801,24 @@ export default function Map() {
               isDark={isDark}
               delayMs={index * 60}
               onClick={() => {
-                setSelectedReport(report);
-                setIsDetailsOpen(true);
+                // Toggle like Maps: re-clicking the same pin dismisses the panel.
+                setSelectedReport((prev) => (prev?.id === report.id ? null : report));
               }}
             />
           ))}
+
+        {/* Google Maps-style floating details: only reveals after images preload */}
+        <AnimatePresence>
+          {selectedReport && isDetailsReady && (
+            <ReportDetailsPanel
+              key={selectedReport.id}
+              report={selectedReport}
+              images={gatedImages}
+              onClose={() => setSelectedReport(null)}
+              onUpvote={handleUpvote}
+            />
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Report Problem Sheet (Drawer with SmoothUI Multi-File Upload) */}
@@ -771,14 +828,6 @@ export default function Map() {
         coordinates={placementCoordinates}
         onSubmit={handleAddReport}
         onCancelPlacement={handleCancelPlacement}
-      />
-
-      {/* Report Details Dialog (with Multi-photo Gallery & ID-based photo fetch) */}
-      <ReportDetailsDialog
-        report={selectedReport}
-        isOpen={isDetailsOpen}
-        onOpenChange={setIsDetailsOpen}
-        onUpvote={handleUpvote}
       />
     </div>
   );
