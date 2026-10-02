@@ -51,7 +51,7 @@ const STATUS_CONFIG: Record<
 };
 
 const PANEL_POSITION =
-  'absolute z-10 inset-x-3 bottom-14 max-h-[62dvh] md:inset-x-auto md:left-3 md:top-3 md:bottom-16 md:w-[400px] md:max-h-none';
+  'absolute z-10 inset-x-3 bottom-14 max-h-[62dvh] md:inset-x-auto md:left-3 md:top-[76px] md:bottom-16 md:w-[400px] md:max-h-none';
 
 function PanelShell({
   children,

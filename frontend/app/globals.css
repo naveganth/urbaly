@@ -98,13 +98,33 @@
 }
 
 .animate-google-pin {
-  animation: map-pin-drop 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: map-pin-drop 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: transform, opacity;
 }
 
 .animate-google-shadow {
-  animation: map-pin-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: map-pin-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: transform, opacity;
+}
+
+/* Single smooth hover lift for teardrop pins (one transform owner). */
+.google-pin-container:hover .animate-google-pin,
+.google-pin-container:hover .group,
+.google-pin-container:focus-visible .animate-google-pin {
+  transform: translateY(-2px) scale(1.08);
+}
+
+/* Selected report pin lifts above neighbours with a soft ring glow. */
+.adaptive-marker.is-selected {
+  z-index: 40;
+}
+
+.adaptive-marker.is-selected .marker-pin-layer {
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.45));
+}
+
+.adaptive-marker.is-selected .marker-photo-layer > div {
+  filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.5));
 }
 
 @keyframes photo-pin-pop {
@@ -125,6 +145,26 @@
 .animate-photo-pin {
   animation: photo-pin-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: transform, opacity;
+}
+
+/* Keep MapLibre zoom/locate controls clear of the floating search card.
+   Desktop card hugs the left; on mobile the full-width card + chips stack
+   needs the controls pushed down. */
+.maplibregl-ctrl-top-right {
+  margin-top: 4px;
+}
+
+@media (max-width: 767px) {
+  .maplibregl-ctrl-top-right {
+    margin-top: 122px;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Seamless pin <-> photo choreography (SmoothUI tokens: EASE_OUT
@@ -264,24 +304,49 @@ img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-shimmer,
 .map-placement-marker {
   position: relative;
   display: flex;
-  height: 44px;
-  width: 34px;
+  height: 42px;
+  width: 30px;
   flex-direction: column;
   align-items: center;
-  filter: drop-shadow(0 6px 14px rgba(2, 132, 199, 0.45));
+  filter: drop-shadow(0 6px 14px rgba(13, 159, 110, 0.4));
   animation: map-pin-drop 260ms ease-out both;
+  transform-origin: bottom center;
+}
+
+.map-placement-halo {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  width: 26px;
+  height: 9px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: radial-gradient(ellipse at center, rgba(13, 159, 110, 0.45) 0%, rgba(13, 159, 110, 0) 70%);
+  animation: placement-halo-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes placement-halo-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.25);
+  }
 }
 
 .map-placement-icon {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 5px;
+  left: 5px;
   display: flex;
-  height: 21px;
-  width: 22px;
+  height: 20px;
+  width: 20px;
   align-items: center;
   justify-content: center;
-  color: #0284c7;
+  color: #0d9f6e;
   pointer-events: none;
 }
 
@@ -295,6 +360,7 @@ img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-shimmer,
   .animate-google-shadow,
   .animate-photo-pin,
   .map-placement-marker,
+  .map-placement-halo,
   .adaptive-marker .marker-pin-layer,
   .adaptive-marker .marker-photo-layer,
   .marker-photo-img {

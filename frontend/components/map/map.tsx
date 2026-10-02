@@ -32,6 +32,9 @@ import {
   ReportCategory,
   ReportStatus,
   CATEGORIES,
+  CATEGORY_ORDER,
+  categoryFromApi,
+  categoryToApi,
   REPORT_IMAGE_CDN,
 } from './types';
 import { ReportProblemSheet } from './report-problem-sheet';
@@ -43,6 +46,7 @@ import {
 } from './use-report-images';
 import { CategoryIcon } from './category-icon';
 import { MapMarker } from './map-marker';
+import { createPlacementMarkerElement } from './placement-pin';
 
 function getCartoApiKey() {
   return (
@@ -134,8 +138,7 @@ export default function Map() {
               id: String(report.id),
               title: report.titulo,
               description: report.descricao || 'Sem descrição informada.',
-              category:
-                (Object.keys(CATEGORIES) as ReportCategory[])[report.categoria] || 'other',
+              category: categoryFromApi(report.categoria),
               coordinates: report.ponto,
               address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
               images: report.foto_nome
@@ -341,6 +344,24 @@ export default function Map() {
     // Same-origin => loaded directly as a module worker.
     maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
+    // Fail fast without WebGL (some mobile browsers disable it).
+    try {
+      const probe = document.createElement('canvas');
+      const gl = probe.getContext('webgl2') ?? probe.getContext('webgl');
+      if (!gl) throw new Error('WebGL context unavailable');
+      // Release the probe context immediately; the map creates its own.
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+    } catch (webglError) {
+      console.error('[Urbaly Map] WebGL unavailable:', webglError);
+      queueMicrotask(() => {
+        setIsMapLoading(false);
+        setMapError(
+          'Este aparelho ou navegador não oferece WebGL, necessário para o mapa. Tente outro navegador.'
+        );
+      });
+      return;
+    }
+
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
@@ -375,6 +396,43 @@ export default function Map() {
 
     mapRef.current = map;
 
+    // Mobile safety: URL-bar changes, rotation, and zero-size first paints
+    // can leave the canvas mis-sized — keep the map synced to its container.
+    let resizeObserver: ResizeObserver | null = null;
+    try {
+      const container = mapContainerRef.current;
+      if (container && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          try {
+            map.resize();
+          } catch {
+            // Resize is a nicety; never break the map over it.
+          }
+        });
+        resizeObserver.observe(container);
+      }
+    } catch {
+      // ResizeObserver unavailable — the map still works, just unsynced.
+    }
+    // Nudge a first resize once laid out (mobile often reports 0x0 first).
+    requestAnimationFrame(() => {
+      try {
+        map.resize();
+      } catch {
+        // Ignored — see above.
+      }
+    });
+
+    // Whichever usable signal (load/idle) arrives first wins.
+    const settleLoaded = (via: string) => {
+      if (mapLoadedRef.current) return;
+      mapLoadedRef.current = true;
+      clearLoadTimeout();
+      setMapInstance(map);
+      setIsMapLoading(false);
+      if (via !== 'load') console.info(`[Urbaly Map] Map ready via ${via}.`);
+    };
+
     // Track zoom from the start so pins can swap to circular CDN photo
     // previews when very zoomed in. `zoomend`/`moveend` keep React renders
     // cheap (no per-frame setState during pinch). The functional update only
@@ -392,11 +450,25 @@ export default function Map() {
     map.on('moveend', syncZoom);
 
     map.on('load', () => {
-      mapLoadedRef.current = true;
-      clearLoadTimeout();
-      setMapInstance(map);
-      setIsMapLoading(false);
+      settleLoaded('load');
     });
+
+    // Fallback: if 'load' misfires but the map idles usable (slow tiles),
+    // reveal it instead of spinning forever.
+    map.once('idle', () => {
+      if (!mapLoadedRef.current) {
+        console.warn('[Urbaly Map] Revealing via idle fallback (load never fired).');
+        settleLoaded('idle');
+      }
+    });
+
+    // Track whether the style arrived so the timeout can blame
+    // "no connection" vs "tiles hanging" correctly.
+    let styleArrived = false;
+    const onStyleData = () => {
+      styleArrived = true;
+    };
+    map.on('styledata', onStyleData);
 
     map.on('error', (event) => {
       console.error('[Urbaly Map] MapLibre error:', event.error || 'Unknown map error');
@@ -407,16 +479,20 @@ export default function Map() {
       }
     });
 
-    // Safety net: if neither 'load' nor 'error' fires (hung request, blocked
-    // CDN, stalled style), stop spinning and offer a retry instead.
+    // Safety net: neither 'load'/'idle' nor 'error' fired in 20s.
     loadTimeoutRef.current = setTimeout(() => {
       if (!mapLoadedRef.current) {
         console.error(
           '[Urbaly Map] Style load timed out after 20s. ' +
-            `Style: ${initialStyle.split('?')[0]} | key present: ${apiKey ? 'yes' : 'no'}`
+            `Style: ${initialStyle.split('?')[0]} | key present: ${apiKey ? 'yes' : 'no'} | ` +
+            `style arrived: ${styleArrived ? 'yes' : 'no'}`
         );
         setIsMapLoading(false);
-        setMapError('O mapa demorou demais para carregar. Verifique sua conexão e tente novamente.');
+        setMapError(
+          styleArrived
+            ? 'O mapa conectou, mas os blocos estão demorando (rede lenta?). Aguarde ou tente novamente.'
+            : 'O mapa demorou demais para carregar. Verifique sua conexão e tente novamente.'
+        );
       }
     }, 20000);
 
@@ -440,6 +516,8 @@ export default function Map() {
       }
       map.off('zoomend', syncZoom);
       map.off('moveend', syncZoom);
+      map.off('styledata', onStyleData);
+      resizeObserver?.disconnect();
       setMapInstance(null);
       map.remove();
       mapRef.current = null;
@@ -469,26 +547,12 @@ export default function Map() {
         const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
         setPlacementCoordinates(coords);
 
-        // Render or move placement marker
+        // Render or move placement marker (shared teardrop silhouette in
+        // app-primary with a pulsing halo — see placement-pin.ts)
         if (placementMarkerRef.current) {
           placementMarkerRef.current.setLngLat(coords);
         } else {
-          const el = document.createElement('div');
-          el.className = 'google-placement-marker select-none';
-          el.innerHTML = `
-            <div class="map-placement-marker">
-              <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17 0C7.611 0 0 7.611 0 17C0 26.5 13.8 41.8 16.1 43.9C16.6 44.4 17.4 44.4 17.9 43.9C20.2 41.8 34 26.5 34 17C34 7.611 26.389 0 17 0Z" fill="#0284c7" />
-                <path d="M17 1.5C8.44 1.5 1.5 8.44 1.5 17C1.5 19.8 2.6 23 4.5 26.2C5.6 21 9.8 11.5 17 11.5C24.2 11.5 28.4 21 29.5 26.2C31.4 23 32.5 19.8 32.5 17C32.5 8.44 25.56 1.5 17 1.5Z" fill="white" fill-opacity="0.25" />
-                <circle cx="17" cy="16.5" r="9.5" fill="#ffffff" />
-              </svg>
-              <div class="map-placement-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </div>
-            </div>
-          `;
+          const el = createPlacementMarkerElement({ isDark });
           placementMarkerRef.current = new maplibregl.Marker({
             element: el,
             anchor: 'bottom',
@@ -567,6 +631,18 @@ export default function Map() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReport?.id, isDetailsReady]);
 
+  // Backend errors are terse; expand the known ones, keeping the original text searchable.
+  const translateReportError = (error: string | undefined): string => {
+    if (!error) return 'Não foi possível enviar o reporte.';
+    if (/cloudflare|bad gateway|origin.*(overload|misconfig)|error 502|\b502\b/i.test(error))
+      return 'O servidor está indisponível no momento (erro 502). Aguarde cerca de 1 minuto e tente de novo — seus dados e fotos estão preservados.';
+    if (/muito grandes/i.test(error))
+      return 'As imagens ultrapassaram o limite de ~300KB por foto do servidor. Remova uma foto ou use uma imagem menor e tente de novo.';
+    if (/inválida/i.test(error))
+      return `O servidor recusou as imagens (erro: ${error}). Se persistir com outra foto, o problema está no servidor — avise a equipe com o horário do envio.`;
+    return error;
+  };
+
   // Add new report submitted from Sheet without full page refresh
   const handleAddReport = async (
     newReportData: Omit<StreetReport, 'id' | 'createdAt' | 'upvotes' | 'status'>
@@ -576,7 +652,7 @@ export default function Map() {
     const res = await createMapReport({
       titulo: newReportData.title,
       descricao: newReportData.description,
-      categoria: (Object.keys(CATEGORIES) as ReportCategory[]).indexOf(newReportData.category),
+      categoria: categoryToApi(newReportData.category),
       ponto: newReportData.coordinates,
       fotoData: newReportData.images,
     });
@@ -585,7 +661,7 @@ export default function Map() {
       createdId = String(res.id);
     }
     if (!res.success) {
-      throw new Error(res.error || 'Não foi possível enviar o reporte.');
+      throw new Error(translateReportError(res.error));
     }
 
     const createdReport: StreetReport = {
@@ -623,12 +699,37 @@ export default function Map() {
   };
 
   return (
-   <div className="flex h-dvh w-full flex-col gap-2 overflow-hidden">
-      {/* Top Floating Control Bar */}
-      <div className="flex flex-col rounded-md backdrop-blur-sm md:flex-row md:items-center md:justify-between">
-        {/* Search & Status Filter */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="relative min-w-0 flex-1 md:max-w-md">
+    <div className="flex h-dvh w-full flex-col gap-2 overflow-hidden">
+      {(isOffline || reportsError) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100"
+        >
+          <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            {isOffline
+              ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
+              : reportsError}
+          </span>
+        </div>
+      )}
+
+      {/* Interactive Map Container — search + categories float Google Maps-style */}
+      <div
+        ref={mapContainerRef}
+        className={cn(
+          'relative w-full flex-1 min-h-0 overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow]',
+          isPlacementMode && 'placement-mode-active'
+        )}
+      >
+        {/* Floating search card */}
+        <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-3 md:top-3 md:w-[392px]">
+          <div
+            role="search"
+            className="flex items-center gap-1.5 rounded-2xl border border-border/70 bg-background/95 py-1.5 pl-1.5 pr-2 shadow-xl backdrop-blur-md dark:bg-zinc-900/95"
+          >
+            <div className="relative min-w-0 flex-1">
             {isDetailsLoading ? (
               <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-primary" />
             ) : (
@@ -639,7 +740,8 @@ export default function Map() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={isDetailsLoading ? 'Carregando ocorrência…' : 'Buscar por rua, bairro ou problema...'}
               aria-busy={isDetailsLoading}
-              className="h-11 rounded-md border-border/70 bg-background/80 pl-9 text-sm shadow-none transition-[border-color,box-shadow] focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15"
+              aria-label="Buscar ocorrências"
+              className="h-11 rounded-xl border-0 bg-transparent pl-9 text-sm shadow-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-primary/30"
             />
             {isDetailsLoading ? (
               <span role="status" aria-live="polite" className="sr-only">
@@ -659,161 +761,113 @@ export default function Map() {
             )}
           </div>
 
-          {/* Status Dropdown Filter */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className="hidden h-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-md border border-border/70 bg-background/80 px-3 text-xs font-medium outline-none transition-[background-color,border-color,color] hover:border-primary/40 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:inline-flex">
-              <SlidersHorizontal className="size-4" />
-              <span className="hidden sm:inline">Status:</span>
-              <span className="font-medium leading-tight">
-                {selectedStatus === 'all'
-                  ? 'Todos'
-                  : selectedStatus === 'open'
-                    ? 'Abertos'
-                    : selectedStatus === 'investigating'
-                      ? 'Em Análise'
-                      : 'Resolvidos'}
-              </span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="text-xs">
-              <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
-                Todos os status
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedStatus('open')}>
-                Em Aberto
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>
-                Em Análise
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>
-                Resolvidos
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {/* Primary Action Button */}
-        <div className="flex w-full shrink-0 items-center gap-2 md:w-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex h-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-md border border-border/70 bg-background/80 px-3 text-xs font-medium outline-none transition-[background-color,border-color,color] hover:border-primary/40 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:hidden">
-              <SlidersHorizontal className="size-4" />
-              Filtros
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-[min(28rem,70vh)] w-64 overflow-y-auto text-xs">
-              <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSelectedStatus('all')}>Todos os status</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedStatus('open')}>Em aberto</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>Em análise</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>Resolvidos</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Filtrar por categoria</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => setSelectedCategory('all')}>
-                Todas as categorias ({reports.length})
-              </DropdownMenuItem>
-              {(Object.keys(CATEGORIES) as ReportCategory[]).map((catKey) => (
-                <DropdownMenuItem key={catKey} onClick={() => setSelectedCategory(catKey)}>
-                  <CategoryIcon category={catKey} className="size-3.5" />
-                  {CATEGORIES[catKey].label} ({reports.filter((r) => r.category === catKey).length})
+            {/* Status Dropdown Filter */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="hidden h-11 w-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:inline-flex" aria-label="Filtrar por status">
+                <span className="relative flex items-center justify-center">
+                  <SlidersHorizontal className="size-4" />
+                  {selectedStatus !== 'all' && (
+                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />
+                  )}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="text-xs">
+                <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
+                  Todos os status
                 </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              setIsPlacementMode((prev) => !prev);
-              if (isPlacementMode) {
-                handleCancelPlacement();
-              }
-            }}
+                <DropdownMenuItem onClick={() => setSelectedStatus('open')}>
+                  Em Aberto
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>
+                  Em Análise
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>
+                  Resolvidos
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Mobile filters (status + categories) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-11 w-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:hidden" aria-label="Abrir filtros">
+                <span className="relative flex items-center justify-center">
+                  <SlidersHorizontal className="size-4" />
+                  {(selectedStatus !== 'all' || selectedCategory !== 'all') && (
+                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />
+                  )}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[min(28rem,70vh)] w-64 overflow-y-auto text-xs">
+                <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>Todos os status</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('open')}>Em aberto</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>Em análise</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>Resolvidos</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Filtrar por categoria</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setSelectedCategory('all')}>
+                  Todas as categorias ({reports.length})
+                </DropdownMenuItem>
+                {CATEGORY_ORDER.map((catKey) => (
+                  <DropdownMenuItem key={catKey} onClick={() => setSelectedCategory(catKey)}>
+                    <CategoryIcon category={catKey} className="size-3.5" />
+                    {CATEGORIES[catKey].label} ({reports.filter((r) => r.category === catKey).length})
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Category chips — scrollable row under the card, hidden while a report is open */}
+          <div
             className={cn(
-              'h-11 w-full min-w-0 cursor-pointer touch-manipulation gap-2 rounded-md px-4 text-sm font-semibold shadow-sm transition-[background-color,box-shadow,transform] duration-150 active:scale-[0.98] md:w-auto',
-              isPlacementMode
-                ? 'bg-amber-500 text-white shadow-amber-500/20 hover:bg-amber-600'
-                : 'bg-primary text-primary-foreground shadow-primary/20 hover:bg-primary/90'
+              'mt-2 items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none',
+              selectedReport ? 'hidden' : 'flex'
             )}
           >
-            {isPlacementMode ? (
-              <>
-                <X className="size-4" />
-                Cancelar marcação
-              </>
-            ) : (
-              <>
-                <CircleAlert className="report-action-icon size-4" aria-hidden="true" />
-                Reportar Problema
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {(isOffline || reportsError) && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-100"
-        >
-          <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>
-            {isOffline
-              ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
-              : reportsError}
-          </span>
-        </div>
-      )}
-
-      {/* Category Filter Pills */}
-      <div className="relative hidden items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs md:flex">
-        <button
-          type="button"
-          onClick={() => setSelectedCategory('all')}
-          className={cn(
-            'min-h-11 cursor-pointer touch-manipulation whitespace-nowrap rounded-md border px-3 py-1.5 font-medium transition-[background-color,border-color,color,box-shadow] duration-150',
-            selectedCategory === 'all'
-              ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-              : 'bg-card text-muted-foreground border-border hover:bg-muted'
-          )}
-        >
-          Todas as Categorias ({reports.length})
-        </button>
-
-        {(Object.keys(CATEGORIES) as ReportCategory[]).map((catKey) => {
-          const cat = CATEGORIES[catKey];
-          const count = reports.filter((r) => r.category === catKey).length;
-          const isSelected = selectedCategory === catKey;
-
-          return (
             <button
-              key={catKey}
               type="button"
-              onClick={() => setSelectedCategory(catKey)}
+              onClick={() => setSelectedCategory('all')}
               className={cn(
-                'flex min-h-11 cursor-pointer touch-manipulation items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 font-medium transition-[background-color,border-color,color,box-shadow] duration-150',
-                isSelected
-                  ? 'bg-foreground text-background border-foreground shadow-xs'
-                  : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                'shrink-0 cursor-pointer touch-manipulation whitespace-nowrap rounded-full border px-3 py-2 text-xs font-medium shadow-md backdrop-blur-md transition-[background-color,border-color,color] duration-150',
+                selectedCategory === 'all'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border/70 bg-background/95 text-muted-foreground hover:bg-muted dark:bg-zinc-900/95'
               )}
             >
-              <CategoryIcon category={catKey} className="size-3" />
-              <span>{cat.label}</span>
-              <span className="font-mono text-[10px] tabular-nums tracking-normal opacity-75">({count})</span>
+              Todas ({reports.length})
             </button>
-          );
-        })}
-      </div>
 
-      {/* Interactive Map Container */}
-        <div
-        ref={mapContainerRef}
-        className={cn(
-          'relative w-full flex-1 min-h-0 overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow]',
-          isPlacementMode && 'placement-mode-active'
-        )}
->
+            {CATEGORY_ORDER.map((catKey) => {
+              const cat = CATEGORIES[catKey];
+              const count = reports.filter((r) => r.category === catKey).length;
+              const isSelected = selectedCategory === catKey;
+
+              return (
+                <button
+                  key={catKey}
+                  type="button"
+                  onClick={() => setSelectedCategory(isSelected ? 'all' : catKey)}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    'flex shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-xs font-medium shadow-md backdrop-blur-md transition-[background-color,border-color,color] duration-150',
+                    isSelected
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border/70 bg-background/95 text-muted-foreground hover:bg-muted dark:bg-zinc-900/95'
+                  )}
+                >
+                  <CategoryIcon category={catKey} className="size-3.5" />
+                  <span>{cat.label}</span>
+                  <span className="font-mono text-[10px] tabular-nums opacity-75">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {isMapLoading && !mapError && (
           <div
             role="status"
@@ -846,9 +900,9 @@ export default function Map() {
           </div>
         )}
 
-        {/* Placement Mode Top Overlay Banner */}
+        {/* Placement Mode Top Overlay Banner — sits below the floating search */}
         {isPlacementMode && (
-          <div className="absolute left-3 right-3 top-3 z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-md border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 dark:bg-zinc-900/95">
+          <div className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[116px] dark:bg-zinc-900/95">
             <span className="flex size-2 rounded-full bg-primary animate-ping" />
             <Crosshair className="size-4 text-primary" />
             <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
@@ -971,7 +1025,8 @@ export default function Map() {
                   thumbPending,
                 }}
                 isDark={isDark}
-                delayMs={index * 60}
+                delayMs={Math.min(index, 12) * 40}
+                isSelected={selectedReport?.id === report.id}
                 onClick={() => {
                   // Toggle like Maps: re-clicking the same pin dismisses the panel.
                   setSelectedReport((prev) => (prev?.id === report.id ? null : report));
@@ -979,6 +1034,38 @@ export default function Map() {
               />
             );
           })}
+
+        {/* Report FAB — Maps-style floating action, bottom-right */}
+        <Button
+          type="button"
+          onClick={() => {
+            setIsPlacementMode((prev) => !prev);
+            if (isPlacementMode) {
+              handleCancelPlacement();
+            }
+          }}
+          aria-pressed={isPlacementMode}
+          className={cn(
+            'absolute bottom-16 right-3 z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-all duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
+            selectedReport &&
+              'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
+            isPlacementMode
+              ? 'bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600'
+              : 'bg-primary text-primary-foreground shadow-primary/30 hover:bg-primary/90'
+          )}
+        >
+          {isPlacementMode ? (
+            <>
+              <X className="size-4" />
+              Cancelar
+            </>
+          ) : (
+            <>
+              <CircleAlert className="report-action-icon size-4" aria-hidden="true" />
+              Reportar
+            </>
+          )}
+        </Button>
 
         {/* Google Maps-style floating details: only reveals after images preload */}
         <AnimatePresence>
