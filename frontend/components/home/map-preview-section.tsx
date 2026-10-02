@@ -20,7 +20,7 @@ export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProp
         className={
           isMapOpen
             ? "fixed inset-0 z-50 flex h-dvh min-h-0 flex-col overflow-y-auto bg-background text-foreground"
-            : "relative flex min-h-88 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40 shadow-xs sm:min-h-[30rem]"
+            : "relative flex min-h-72 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40 shadow-xs sm:min-h-96"
         }
         transition={{ layout: { duration: 0.5, ease: [0.32, 0.72, 0, 1] } }}
       >
@@ -64,23 +64,13 @@ export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProp
               <Button
                 variant="default"
                 size="sm"
-                className="mt-2 gap-1.5 shadow-sm"
+                className="mt-2 gap-1.5"
                 onClick={onToggle}
               >
                 <Maximize2 className="size-3.5" />
-                Abrir Mapa Completo
+                Abrir mapa
               </Button>
             </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Abrir mapa em tela cheia"
-              className="absolute right-4 top-4 bg-background/80 backdrop-blur-sm"
-              onClick={onToggle}
-            >
-              <Maximize2 />
-            </Button>
           </>
         )}
       </motion.section>

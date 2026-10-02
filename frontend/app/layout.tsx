@@ -13,7 +13,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html
-      lang='es'
+      lang='pt-BR'
       suppressHydrationWarning
       className={cn(
         'font-sans',
