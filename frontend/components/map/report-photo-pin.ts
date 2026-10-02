@@ -74,8 +74,8 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
 
   const container = document.createElement('div');
   container.className = 'report-photo-container relative flex flex-col items-center select-none';
-  container.style.width = '68px';
-  container.style.height = '76px';
+  container.style.width = '62px';
+  container.style.height = '70px';
 
   const popClass = animateIn ? 'animate-photo-pin' : '';
   const extraCount = imageCount > 1 ? imageCount - 1 : 0;
@@ -89,9 +89,9 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
 
   container.innerHTML = `
     <div class="${popClass} relative transition-transform duration-200 ease-out group-hover:-translate-y-1 group-hover:scale-105 group-focus-visible:-translate-y-1 group-focus-visible:scale-105"
-      style="animation-delay: ${delayMs}ms; transform-origin: bottom center; width: 64px; height: 64px;">
+      style="animation-delay: ${delayMs}ms; transform-origin: bottom center; width: 58px; height: 58px;">
       <div class="absolute inset-0 rounded-full transition-shadow duration-200 group-hover:shadow-2xl"
-        style="padding: 3px; background: ${ringColor}; box-shadow: 0 8px 24px rgba(0,0,0,0.35);">
+        style="padding: 2.5px; background: ${ringColor}; box-shadow: 0 10px 26px rgba(0,0,0,0.30);">
         <div class="marker-photo-frame relative h-full w-full overflow-hidden rounded-full" style="background: ${isDark ? '#18181b' : '#ffffff'};">
           <div class="absolute inset-0 flex items-center justify-center" style="background: ${ringColor}22;">
             <div style="transform: scale(1.8); display: flex;">${fallbackIcon}</div>

@@ -29,6 +29,7 @@ interface MapMarkerProps {
   isDark: boolean;
   delayMs?: number;
   animateIn?: boolean;
+  isSelected?: boolean;
   onClick: (pointer: MapMarkerPointer) => void;
 }
 
@@ -48,6 +49,7 @@ export const MapMarker = React.memo(function MapMarker({
   isDark,
   delayMs = 0,
   animateIn = true,
+  isSelected = false,
   onClick,
 }: MapMarkerProps) {
   const markerRef = React.useRef<maplibregl.Marker | null>(null);
@@ -70,6 +72,7 @@ export const MapMarker = React.memo(function MapMarker({
       isDark,
       delayMs,
       animateIn,
+      isSelected,
     });
     handle.setPhotoMode(
       Boolean(pointer.showPhoto),
@@ -127,6 +130,10 @@ export const MapMarker = React.memo(function MapMarker({
       pointer.thumbPending
     );
   }, [pointer.showPhoto, pointer.imageUrl, pointer.imageCount, pointer.thumbPending]);
+
+  React.useEffect(() => {
+    handleRef.current?.setSelected(isSelected);
+  }, [isSelected]);
 
   return null;
 });

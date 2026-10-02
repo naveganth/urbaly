@@ -16,6 +16,7 @@ export interface AdaptiveMarkerData {
   isDark: boolean;
   delayMs?: number;
   animateIn?: boolean;
+  isSelected?: boolean;
 }
 
 export interface AdaptiveMarkerHandle {
@@ -28,6 +29,8 @@ export interface AdaptiveMarkerHandle {
    * fetched but no `imageUrl` is known yet.
    */
   setPhotoMode(show: boolean, imageUrl?: string, imageCount?: number, thumbnailPending?: boolean): void;
+  /** Lift + ring highlight for the currently selected report. */
+  setSelected(selected: boolean): void;
 }
 
 /**
@@ -49,13 +52,14 @@ export function createAdaptiveMarkerElement(data: AdaptiveMarkerData): AdaptiveM
     isDark,
     delayMs = 0,
     animateIn = true,
+    isSelected = false,
   } = data;
 
   const container = document.createElement('div');
   container.className =
     'adaptive-marker group relative flex cursor-pointer select-none flex-col items-center';
-  container.style.width = '68px';
-  container.style.height = '76px';
+  container.style.width = '62px';
+  container.style.height = '70px';
   container.setAttribute('role', 'button');
   container.setAttribute('tabindex', '0');
   container.setAttribute(
@@ -64,6 +68,7 @@ export function createAdaptiveMarkerElement(data: AdaptiveMarkerData): AdaptiveM
   );
   // Native fallback tooltip for touch / keyboard users.
   container.setAttribute('title', `${title} · ${categoryLabel}`);
+  if (isSelected) container.classList.add('is-selected');
 
   const pinLayer = document.createElement('div');
   pinLayer.className = 'marker-pin-layer';
@@ -145,5 +150,9 @@ export function createAdaptiveMarkerElement(data: AdaptiveMarkerData): AdaptiveM
     }
   };
 
-  return { element: container, setPhotoMode };
+  const setSelected = (selected: boolean): void => {
+    container.classList.toggle('is-selected', selected);
+  };
+
+  return { element: container, setPhotoMode, setSelected };
 }
