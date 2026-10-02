@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@chakra-ui/react"],
   },
+  allowedDevOrigins: ['192.168.100.69'],
   async rewrites() {
     return [
       {
