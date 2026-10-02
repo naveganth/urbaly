@@ -137,19 +137,20 @@ const MACAPA_BOUNDS: [number, number, number, number] = [-51.2, -0.1, -50.9, 0.2
 const EMPTY_REPORT_IMAGE =
   'UklGRkoAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAwAAAARBxAR/Q9ERP8DAABWUDggGAAAABQBAJ0BKgEAAQAAAP4AAA3AAP7mtQAAAA==';
 
-function getWebpBase64(image: string): string {
+function getPhotoBase64(image: string): string {
   const trimmed = image.trim();
-  const dataUrlMatch = trimmed.match(/^data:image\/webp;base64,(.+)$/i);
+  // JPEG (with EXIF, required by the backend) or WebP, as data URLs.
+  const dataUrlMatch = trimmed.match(/^data:image\/(jpeg|webp);base64,(.+)$/i);
 
   if (dataUrlMatch) {
-    return dataUrlMatch[1];
+    return dataUrlMatch[2];
   }
 
   if (/^data:image\//i.test(trimmed)) {
-    throw new Error('A API aceita apenas imagens convertidas para WebP.');
+    throw new Error('A API aceita apenas imagens JPEG (com EXIF) ou WebP.');
   }
 
-  throw new Error('A imagem precisa ser enviada como uma data URL WebP.');
+  throw new Error('A imagem precisa ser enviada como data URL JPEG ou WebP.');
 }
 
 function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
@@ -163,6 +164,8 @@ function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
         typeof report === 'object' &&
         typeof report.id === 'number' &&
         typeof report.titulo === 'string' &&
+        typeof report.categoria === 'number' &&
+        Number.isInteger(report.categoria) &&
         Array.isArray(report.ponto) &&
         report.ponto.length === 2 &&
         (report.foto_nome === undefined || typeof report.foto_nome === 'string') &&
@@ -271,6 +274,32 @@ export async function getReportImages(id: number | string): Promise<string[]> {
   return [];
 }
 
+/** Backend errors vary (text, `{error}`, `{detail}`, empty) — extract something usable. */
+function extractApiErrorMessage(data: unknown): string {
+  if (typeof data === 'string' && data.trim().length > 0) return data;
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    for (const key of ['error', 'message', 'detail', 'msg', 'erro']) {
+      const value = obj[key];
+      if (typeof value === 'string' && value.trim().length > 0) return value;
+      if (Array.isArray(value) && value.length > 0) {
+        const joined = value
+          .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+          .join('; ')
+          .slice(0, 500);
+        if (joined) return joined;
+      }
+    }
+    try {
+      const raw = JSON.stringify(data).slice(0, 500);
+      if (raw && raw !== '{}' && raw !== '[]' && raw !== '""') return raw;
+    } catch {
+      // Fall through to the generic message below.
+    }
+  }
+  return 'Não foi possível enviar o registro para o servidor.';
+}
+
 export async function createMapReport(input: {
   titulo: string;
   descricao: string;
@@ -281,12 +310,12 @@ export async function createMapReport(input: {
   let fotoData: string[];
   try {
     fotoData = input.fotoData?.length
-      ? input.fotoData.map(getWebpBase64)
+      ? input.fotoData.map(getPhotoBase64)
       : [EMPTY_REPORT_IMAGE];
   } catch (error: unknown) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'A imagem precisa estar no formato WebP.',
+      error: error instanceof Error ? error.message : 'A imagem precisa estar em JPEG ou WebP.',
     };
   }
 
@@ -309,11 +338,15 @@ export async function createMapReport(input: {
   const response = await sendRawRequest('/reporte', 'POST', payload);
 
   if (!response.ok) {
-    const errorMsg =
-      typeof response.data === 'string'
-        ? response.data
-        : 'Não foi possível enviar o registro para o servidor.';
-    console.warn('Backend API createReport notice:', errorMsg);
+    const errorMsg = extractApiErrorMessage(response.data);
+    try {
+      console.warn(
+        'Backend API createReport notice:',
+        JSON.stringify({ status: response.status, data: response.data }).slice(0, 800)
+      );
+    } catch {
+      console.warn('Backend API createReport notice:', errorMsg);
+    }
     return { success: false, error: errorMsg };
   }
 

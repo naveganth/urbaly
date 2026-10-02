@@ -126,3 +126,36 @@ export const CATEGORIES: Record<ReportCategory, CategoryInfo> = {
 
 export const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
 
+/**
+ * Backend `categoria` is the index into this order (0-9). 9 and out-of-range
+ * map to 'other' so unknown categories degrade instead of mislabeling.
+ */
+export const CATEGORY_ORDER: ReportCategory[] = [
+  'pothole',
+  'lighting',
+  'waste',
+  'drainage',
+  'signage',
+  'accessibility',
+  'greenery',
+  'vandalism',
+  'other',
+];
+
+export function categoryFromApi(categoria: unknown): ReportCategory {
+  if (typeof categoria !== 'number' || !Number.isInteger(categoria)) {
+    console.warn('[Urbaly] categoria fora do intervalo (não-inteiro):', categoria);
+    return 'other';
+  }
+  if (categoria < 0 || categoria > 9) {
+    console.warn('[Urbaly] categoria fora do intervalo 0-9:', categoria);
+    return 'other';
+  }
+  return CATEGORY_ORDER[Math.min(categoria, CATEGORY_ORDER.length - 1)];
+}
+
+export function categoryToApi(category: ReportCategory): number {
+  const index = CATEGORY_ORDER.indexOf(category);
+  return index === -1 ? CATEGORY_ORDER.indexOf('other') : index;
+}
+
