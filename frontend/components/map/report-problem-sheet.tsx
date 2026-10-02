@@ -10,7 +10,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { compressImageToWebP } from '@/lib/image-compress';
+import { compressImageKeepingExif } from '@/lib/image-compress';
+import {
+  validatePhotoFreshness,
+  PHOTO_FRESHNESS_MINUTES,
+} from '@/lib/exif-freshness';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -27,6 +31,7 @@ import AnimatedProgressBar from '@/components/ui/smoothui/animated-progress-bar'
 import { CategoryIcon } from './category-icon';
 import {
   CATEGORIES,
+  CATEGORY_ORDER,
   ReportCategory,
   StreetReport,
 } from './types';
@@ -55,6 +60,10 @@ export function ReportProblemSheet({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCompressing, setIsCompressing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [rejectedPhotos, setRejectedPhotos] = React.useState<
+    { name: string; detail: string }[]
+  >([]);
+  const cameraInputRef = React.useRef<HTMLInputElement | null>(null);
   const [updatedAt] = React.useState(() => new Date());
   const [sheetWidth, setSheetWidth] = React.useState(736);
   const resizeStartRef = React.useRef<{ x: number; width: number } | null>(null);
@@ -62,8 +71,9 @@ export function ReportProblemSheet({
     Boolean(category),
     Boolean(title.trim()),
     Boolean(description.trim()),
+    images.length > 0,
   ].filter(Boolean).length;
-  const requiredProgress = completedRequiredFields * (100 / 3);
+  const requiredProgress = completedRequiredFields * (100 / 4);
 
   const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
     if (window.matchMedia('(max-width: 639px)').matches) return;
@@ -85,24 +95,51 @@ export function ReportProblemSheet({
     if (files.length > 0) {
       setIsCompressing(true);
       setErrorMessage(null);
+      setRejectedPhotos([]);
       try {
         for (const file of files) {
-          const { dataUrl, originalSizeKB, sizeKB } = await compressImageToWebP(file, {
-            maxSizeKB: 280, // strictly under 290KB
-          });
+          // Fresh EXIF capture data required (CreateDate / DateTimeOriginal / ModifyDate).
+          const freshness = await validatePhotoFreshness(file);
+          if (!freshness.accepted) {
+            const detail =
+              freshness.detail ??
+              (freshness.reason === 'too-old' && freshness.ageMinutes !== null
+                ? `tirada há ${Math.round(freshness.ageMinutes)} min (limite: ${PHOTO_FRESHNESS_MINUTES} min)`
+                : freshness.reason === 'no-exif'
+                  ? 'sem data de captura EXIF — tire uma foto agora'
+                  : 'não foi possível ler a data da foto');
+            setRejectedPhotos((prev) => [...prev, { name: file.name, detail }]);
+            continue;
+          }
+          const { dataUrl, originalSizeKB, sizeKB, exifKept } =
+            await compressImageKeepingExif(file, {
+              maxSizeKB: 280, // strictly under 290KB
+            });
           console.info(
             '[Urbaly] Tamanho da imagem antes/depois da compressão:',
             JSON.stringify({
               name: file.name,
               beforeKB: originalSizeKB,
               afterKB: sizeKB,
+              exifKept,
             }),
           );
+          if (!exifKept) {
+            // Backend needs EXIF dates; this file would only bounce back.
+            setRejectedPhotos((prev) => [
+              ...prev,
+              {
+                name: file.name,
+                detail: 'os dados EXIF se perderam na conversão — use uma foto JPEG da câmera',
+              },
+            ]);
+            continue;
+          }
           setImages((prev) => [...prev, dataUrl]);
         }
       } catch (err) {
-        console.error('Error compressing image to WebP:', err);
-        setErrorMessage('Não foi possível otimizar a imagem selecionada para WebP.');
+        console.error('Error compressing image:', err);
+        setErrorMessage('Não foi possível otimizar a imagem selecionada.');
       } finally {
         setIsCompressing(false);
       }
@@ -135,11 +172,27 @@ export function ReportProblemSheet({
       setErrorMessage('Escolha uma categoria para o problema.');
       return;
     }
+    // Backend needs EXIF evidence: a photo-less report can never be stored.
+    if (images.length === 0) {
+      setErrorMessage(
+        'Adicione pelo menos uma foto tirada agora: o servidor exige os dados EXIF da câmera.'
+      );
+      return;
+    }
 
     setErrorMessage(null);
     setIsSubmitting(true);
 
     try {
+      // Links the sent payload to the `[Urbaly] EXIF kept` audit line.
+      console.info(
+        '[Urbaly] Report submit images:',
+        JSON.stringify({
+          count: images.length,
+          sizesKB: images.map((dataUrl) => Math.round(((dataUrl.split(',')[1] ?? '').length * 3) / 4 / 1024)),
+          category,
+        }),
+      );
       await onSubmit({
         title: title.trim(),
         description: description.trim(),
@@ -159,6 +212,7 @@ export function ReportProblemSheet({
       setTitle('');
       setDescription('');
       setImages([]);
+      setRejectedPhotos([]);
       onOpenChange(false);
     } catch (error: unknown) {
       console.error('Error submitting report:', error);
@@ -182,7 +236,7 @@ export function ReportProblemSheet({
         side='right'
         showCloseButton={false}
         style={{ width: `min(${sheetWidth}px, 100vw)` }}
-        className='max-w-none! overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-dvh max-sm:w-full! max-sm:max-w-none! max-sm:translate-x-0 max-sm:border-0'
+        className='max-w-none! overflow-y-auto border-l border-border bg-background p-0 text-foreground shadow-2xl sm:rounded-l-2xl max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-0 max-sm:h-dvh max-sm:w-full! max-sm:max-w-none! max-sm:translate-x-0 max-sm:border-0'
       >
         <div
           role='separator'
@@ -200,7 +254,7 @@ export function ReportProblemSheet({
           {/* Sticky Header */}
           <div className='sticky top-0 z-20 flex items-center gap-3 bg-background/95 px-5 pb-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pr-16 backdrop-blur-md sm:px-6 sm:py-4 sm:pr-16 lg:px-8 lg:pr-16'>
             <div className='flex min-w-0 items-center gap-3'>
-              <span className='flex size-9 items-center justify-center bg-primary text-primary-foreground shrink-0'>
+              <span className='flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shrink-0 shadow-sm'>
                 <CircleAlert className='size-5' aria-hidden='true' />
               </span>
               <div className='min-w-0'>
@@ -275,11 +329,59 @@ export function ReportProblemSheet({
                 className='border-dashed bg-background/50 hover:bg-muted/40 focus-within:border-primary transition-colors duration-150'
               />
 
+              {/* Take-a-photo-now shortcut (mobile opens the camera) */}
+              <div className='flex flex-col gap-1.5'>
+                <input
+                  ref={cameraInputRef}
+                  type='file'
+                  accept='image/*'
+                  capture='environment'
+                  className='hidden'
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    if (files.length > 0) void handleFilesSelected(files);
+                    event.target.value = '';
+                  }}
+                />
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  onClick={() => cameraInputRef.current?.click()}
+                  className='h-10 cursor-pointer gap-2 rounded-xl text-xs font-medium'
+                >
+                  <Camera className='size-4 text-primary' />
+                  Tirar foto agora
+                </Button>
+                <p className='text-[11px] leading-relaxed text-muted-foreground'>
+                  Só aceitamos fotos tiradas nos últimos {PHOTO_FRESHNESS_MINUTES} minutos
+                  (validado pela data EXIF da câmera).
+                </p>
+              </div>
+
+              {/* Rejected photos (stale or missing EXIF) */}
+              {rejectedPhotos.length > 0 && (
+                <div
+                  aria-live='polite'
+                  className='flex flex-col gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-100'
+                >
+                  <span className='font-semibold'>
+                    {rejectedPhotos.length}{' '}
+                    {rejectedPhotos.length === 1 ? 'foto recusada' : 'fotos recusadas'}:
+                  </span>
+                  {rejectedPhotos.map((rejected, index) => (
+                    <span key={`${rejected.name}-${index}`} className='leading-relaxed'>
+                      {rejected.name} — {rejected.detail}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Compression Indicator */}
               {isCompressing && (
                 <div className='flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary animate-pulse'>
                   <Loader2 className='size-3.5 animate-spin' />
-                  <span>Otimizando imagens para WebP (&lt;290KB)...</span>
+                  <span>Otimizando imagens (&lt;290KB, preservando EXIF)...</span>
                 </div>
               )}
 
@@ -293,7 +395,7 @@ export function ReportProblemSheet({
                     {images.map((imgUrl, index) => (
                       <div
                         key={index}
-                        className='relative group overflow-hidden border border-border bg-muted aspect-video transition-[border-color,box-shadow] duration-150 hover:border-foreground/30 hover:shadow-sm'
+                        className='relative group overflow-hidden rounded-xl border border-border bg-muted aspect-video transition-[border-color,box-shadow] duration-150 hover:border-foreground/30 hover:shadow-sm'
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -359,7 +461,7 @@ export function ReportProblemSheet({
                 </div>
 
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
-                  {(Object.keys(CATEGORIES) as ReportCategory[]).map(
+                  {CATEGORY_ORDER.map(
                     (catKey) => {
                       const cat = CATEGORIES[catKey];
                       const isSelected = category === catKey;
@@ -369,8 +471,9 @@ export function ReportProblemSheet({
                           key={catKey}
                           type='button'
                           onClick={() => setCategory(catKey)}
+                          aria-pressed={isSelected}
                           className={cn(
-                            'relative flex min-h-11 touch-manipulation items-start gap-2.5 rounded-md border p-3 pr-10 text-left transition-[background-color,border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                            'relative flex min-h-11 touch-manipulation items-start gap-2.5 rounded-xl border p-3 pr-10 text-left transition-[background-color,border-color,box-shadow] duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                             isSelected
                               ? 'border-primary bg-primary/5 shadow-xs ring-1.5 ring-primary'
                               : 'border-border bg-card hover:bg-muted/50 hover:border-muted-foreground/30 focus-visible:bg-muted/50',
@@ -378,7 +481,7 @@ export function ReportProblemSheet({
                         >
                           <span
                             className={cn(
-                              'p-2 rounded-md shrink-0 mt-0.5 bg-muted text-muted-foreground',
+                              'p-2 rounded-xl shrink-0 mt-0.5 bg-muted text-muted-foreground',
                             )}
                           >
                             <CategoryIcon
@@ -441,11 +544,11 @@ export function ReportProblemSheet({
           </div>
 
           {/* Sticky Action Footer */}
-          <div className='sticky bottom-0 z-30 flex flex-col gap-3 bg-background/95 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-8'>
+          <div className='sticky bottom-0 z-30 flex flex-col gap-3 rounded-t-2xl border-t border-border bg-background/95 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-md sm:px-6 sm:py-4 lg:px-8'>
             <div className='flex items-center gap-3'>
               <AnimatedProgressBar value={requiredProgress} className='flex-1' />
               <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
-                {completedRequiredFields}/3
+                {completedRequiredFields}/4
               </span>
             </div>
             <div className='flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between'>
@@ -467,7 +570,7 @@ export function ReportProblemSheet({
                 <Button
                   type='submit'
                   size='default'
-                  disabled={isSubmitting || isCompressing || !coordinates}
+                  disabled={isSubmitting || isCompressing || !coordinates || images.length === 0}
                   className='h-11 min-w-0 flex-1 touch-manipulation cursor-pointer gap-2 px-3 text-xs font-semibold shadow-sm transition-colors duration-150 active:scale-100! active:translate-y-0! sm:h-8 sm:min-w-38 sm:flex-none'
                 >
                   {isCompressing ? (
