@@ -1,23 +1,51 @@
 "use client"
 
+import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
 import { cn } from "cn"
 
-import { Button } from "@/components/ui/shadcn/button"
 import {
   Field,
   FieldDescription,
   FieldGroup,
 } from "@/components/ui/shadcn/field"
+import { useAuth } from "@/lib/auth-context"
 
-export function LoginForm({
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ""
+
+function LoginFormInner({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const handleGoogleLogin = () => {
-    // TODO: wire Google OAuth (NextAuth / Supabase / custom Rust backend).
-    console.log("Google login placeholder")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { status, error, loginWithGoogle } = useAuth()
+  const [pending, setPending] = React.useState(false)
+  const [localError, setLocalError] = React.useState<string | null>(null)
+
+  const isBusy = pending || status === "loading"
+  const displayError = localError ?? error
+
+  const handleSuccess = async (credential: string | undefined) => {
+    if (!credential) {
+      setLocalError("O Google não retornou a credencial. Tente de novo.")
+      return
+    }
+    setPending(true)
+    setLocalError(null)
+    try {
+      await loginWithGoogle(credential)
+      const next = searchParams.get("next") || "/"
+      router.push(next)
+      router.refresh()
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : "Não foi possível entrar.")
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
@@ -48,27 +76,33 @@ export function LoginForm({
             </FieldDescription>
           </div>
           <Field>
-            <Button
-              variant="outline"
-              type="button"
-              size="lg"
-              onClick={handleGoogleLogin}
-              aria-label="Continuar com Google"
-              className="h-11 min-h-11 w-full touch-manipulation gap-2 text-sm"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="size-4 shrink-0"
-              >
-                <path
-                  d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                  fill="currentColor"
+            {GOOGLE_CLIENT_ID ? (
+              <div className="flex w-full justify-center">
+                <GoogleLogin
+                  text="continue_with"
+                  shape="rectangular"
+                  width="320"
+                  onSuccess={(res) => void handleSuccess(res.credential)}
+                  onError={() =>
+                    setLocalError("Não foi possível conectar ao Google.")
+                  }
                 />
-              </svg>
-              Continuar com Google
-            </Button>
+              </div>
+            ) : (
+              <p className="text-center text-sm text-destructive">
+                NEXT_PUBLIC_GOOGLE_CLIENT_ID não configurado.
+              </p>
+            )}
+            {isBusy && (
+              <p role="status" className="text-center text-sm text-muted-foreground">
+                Entrando…
+              </p>
+            )}
+            {displayError && (
+              <p role="alert" className="text-center text-sm text-destructive">
+                {displayError}
+              </p>
+            )}
           </Field>
         </FieldGroup>
       </form>
@@ -83,5 +117,33 @@ export function LoginForm({
         Voltar ao início
       </Link>
     </div>
+  )
+}
+
+function LoginFormFallback(props: React.ComponentProps<"div">) {
+  return (
+    <div className={cn("flex w-full flex-col gap-6", props.className)}>
+      <div
+        aria-hidden
+        className="flex min-h-11 items-center justify-center rounded-none border border-border bg-muted text-sm text-muted-foreground"
+      >
+        Carregando login…
+      </div>
+    </div>
+  )
+}
+
+export function LoginForm(props: React.ComponentProps<"div">) {
+  const form = GOOGLE_CLIENT_ID ? (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <LoginFormInner {...props} />
+    </GoogleOAuthProvider>
+  ) : (
+    <LoginFormInner {...props} />
+  )
+  return (
+    <React.Suspense fallback={<LoginFormFallback {...props} />}>
+      {form}
+    </React.Suspense>
   )
 }

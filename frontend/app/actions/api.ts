@@ -20,9 +20,11 @@ async function executeRawRequest(
   baseUrl: string,
   path: string,
   method: string,
-  body?: unknown
+  body?: unknown,
+  jwt?: string,
 ): Promise<ApiResponse> {
   const urlString = `${baseUrl}${path}`;
+  const authHeaders: Record<string, string> = jwt ? { Authorization: `Bearer ${jwt}` } : {};
 
   if (method !== 'GET') {
     return fetch(urlString, {
@@ -30,6 +32,7 @@ async function executeRawRequest(
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
@@ -62,6 +65,7 @@ async function executeRawRequest(
           method,
           headers: {
             'Content-Type': 'application/json',
+            ...authHeaders,
             ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
           },
         },
@@ -104,14 +108,14 @@ function isConnectionError(data: unknown): boolean {
   );
 }
 
-async function sendRawRequest(path: string, method: string, body?: unknown): Promise<ApiResponse> {
-  const primaryResult = await executeRawRequest(PRIMARY_API_BASE_URL, path, method, body);
+async function sendRawRequest(path: string, method: string, body?: unknown, jwt?: string): Promise<ApiResponse> {
+  const primaryResult = await executeRawRequest(PRIMARY_API_BASE_URL, path, method, body, jwt);
   if (
     !primaryResult.ok &&
     PRIMARY_API_BASE_URL !== FALLBACK_API_BASE_URL &&
     (primaryResult.status === 500 || isConnectionError(primaryResult.data))
   ) {
-    return executeRawRequest(FALLBACK_API_BASE_URL, path, method, body);
+    return executeRawRequest(FALLBACK_API_BASE_URL, path, method, body, jwt);
   }
   return primaryResult;
 }
@@ -300,13 +304,16 @@ function extractApiErrorMessage(data: unknown): string {
   return 'Não foi possível enviar o registro para o servidor.';
 }
 
-export async function createMapReport(input: {
-  titulo: string;
-  descricao: string;
-  categoria: number;
-  ponto: [number, number];
-  fotoData?: string[];
-}): Promise<{ id?: number; success: boolean; error?: string }> {
+export async function createMapReport(
+  input: {
+    titulo: string;
+    descricao: string;
+    categoria: number;
+    ponto: [number, number];
+    fotoData?: string[];
+  },
+  jwt?: string,
+): Promise<{ id?: number; success: boolean; error?: string }> {
   let fotoData: string[];
   try {
     fotoData = input.fotoData?.length
@@ -335,9 +342,12 @@ export async function createMapReport(input: {
     }),
   );
 
-  const response = await sendRawRequest('/reporte', 'POST', payload);
+  const response = await sendRawRequest('/reporte', 'POST', payload, jwt);
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      return { success: false, error: 'Sessão expirada. Entre novamente para enviar o reporte.' };
+    }
     const errorMsg = extractApiErrorMessage(response.data);
     try {
       console.warn(
@@ -361,7 +371,7 @@ export async function createMapReport(input: {
   return { success: true };
 }
 
-export async function deleteMapReport(id: number | string) {
+export async function deleteMapReport(id: number | string, jwt?: string) {
   const numericId = typeof id === 'number' ? id : parseInt(id, 10);
   if (isNaN(numericId)) {
     throw new Error('ID de reporte inválido.');
@@ -369,7 +379,7 @@ export async function deleteMapReport(id: number | string) {
 
   const payload = { id: numericId };
   console.info('[Urbaly] JSON do reporte excluído:', JSON.stringify(payload));
-  const response = await sendRawRequest('/reporte', 'DELETE', payload);
+  const response = await sendRawRequest('/reporte', 'DELETE', payload, jwt);
   console.info(
     '[Urbaly] Resposta do reporte excluído:',
     JSON.stringify(response.data),

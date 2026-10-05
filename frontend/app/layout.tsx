@@ -2,6 +2,7 @@ import './globals.css';
 import { Inter, Instrument_Sans } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/theme-provider';
+import { AuthProvider } from '@/lib/auth-context';
 
 const instrumentSansHeading = Instrument_Sans({
   subsets: ['latin'],
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       )}
     >
       <body className='min-h-screen bg-background text-foreground antialiased'>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

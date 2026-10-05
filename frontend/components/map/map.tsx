@@ -25,6 +25,7 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { createMapReport, getMapReports, getReportImages } from '@/app/actions/api';
+import { useAuth } from '@/lib/auth-context';
 import { AnimatePresence } from 'motion/react';
 import { INITIAL_REPORTS } from '@/data/mock-reports';
 import {
@@ -91,6 +92,7 @@ function isFetchableReportId(id: string): boolean {
 
 export default function Map() {
   const { resolvedTheme } = useTheme();
+  const { jwt } = useAuth();
   const [hasMounted, setHasMounted] = React.useState(false);
   const isDark = hasMounted && resolvedTheme === 'dark';
 
@@ -649,13 +651,16 @@ export default function Map() {
   ) => {
     let createdId: string | undefined;
 
-    const res = await createMapReport({
-      titulo: newReportData.title,
-      descricao: newReportData.description,
-      categoria: categoryToApi(newReportData.category),
-      ponto: newReportData.coordinates,
-      fotoData: newReportData.images,
-    });
+    const res = await createMapReport(
+      {
+        titulo: newReportData.title,
+        descricao: newReportData.description,
+        categoria: categoryToApi(newReportData.category),
+        ponto: newReportData.coordinates,
+        fotoData: newReportData.images,
+      },
+      jwt ?? undefined,
+    );
 
     if (res.success && res.id) {
       createdId = String(res.id);

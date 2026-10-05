@@ -8,6 +8,9 @@ import { useTheme } from "@/components/theme-provider"
 import { ChevronDown, LogOut, Menu, Moon, Settings, Sun, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toggleThemeWithTransition } from "@/lib/theme-transition"
+import { useAuth } from "@/lib/auth-context"
+import { getAvatarUrl, getDisplayName, getInitials } from "@/lib/auth"
+import { Button } from "@/components/ui/shadcn/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/shadcn/avatar"
 import SmoothDropdownMenu from "@/components/ui/smoothui"
 import {
@@ -47,11 +50,18 @@ export function Navbar({
 }: NavbarProps) {
   const pathname = usePathname()
   const { resolvedTheme, setTheme } = useTheme()
+  const { user, status, logout } = useAuth()
 
   const toggleTheme = () => {
     toggleThemeWithTransition(resolvedTheme, setTheme)
   }
   const router = useRouter()
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+    router.refresh()
+  }
 
   const isLinkActive = (href: string, label: string) =>
     activeTab ? activeTab === label : pathname === href
@@ -165,17 +175,40 @@ export function Navbar({
                     </Link>
                   )
                 })}
+                {status !== "authenticated" && (
+                  <Link
+                    href="/login"
+                    className="py-3 text-sm font-semibold text-foreground"
+                  >
+                    Entrar
+                  </Link>
+                )}
               </nav>
             </SheetContent>
           </Sheet>
 
+          {status === "loading" ? (
+            <div
+              aria-hidden
+              className="h-8 w-20 animate-pulse rounded-none bg-muted"
+            />
+          ) : status !== "authenticated" ? (
+            <Button
+              variant="default"
+              size="sm"
+              render={<Link href="/login" />}
+              className="min-h-9 touch-manipulation px-4 text-sm"
+            >
+              Entrar
+            </Button>
+          ) : (
           <SmoothDropdownMenu
             align="end"
             className="w-52 p-1"
             items={[
               {
                 key: "account-label",
-                label: "",
+                label: getDisplayName(user) || user?.email || "",
                 groupLabel: "Minha conta",
               },
               {
@@ -205,6 +238,7 @@ export function Navbar({
                 key: "logout",
                 label: "Sair da conta",
                 icon: <LogOut />,
+                onSelect: handleLogout,
               },
             ]}
             triggerProps={{
@@ -214,10 +248,11 @@ export function Navbar({
             }}
           >
               <Avatar className="size-7 border border-border sm:size-8">
-                <AvatarImage src="/pfp.svg" />
-                <AvatarFallback className="text-[11px]">UR</AvatarFallback>
+                <AvatarImage src={getAvatarUrl(user) ?? "/pfp.svg"} />
+                <AvatarFallback className="text-[11px]">{getInitials(user)}</AvatarFallback>
               </Avatar>
           </SmoothDropdownMenu>
+          )}
         </div>
       </div>
     </header>
