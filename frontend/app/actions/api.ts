@@ -130,6 +130,8 @@ export type ApiMapReport = {
   data_atualizacao?: string;
   foto_nome?: string;
   foto_data?: string[];
+  /** Dono do reporte. Ausente ou 0 = reporte legado anônimo. */
+  id_user?: number;
 };
 
 interface ApiMapReportsResponse {
@@ -172,6 +174,7 @@ function isMapReportsResponse(data: unknown): data is ApiMapReportsResponse {
         Number.isInteger(report.categoria) &&
         Array.isArray(report.ponto) &&
         report.ponto.length === 2 &&
+        (report.id_user === undefined || typeof report.id_user === 'number') &&
         (report.foto_nome === undefined || typeof report.foto_nome === 'string') &&
         (report.foto_data === undefined ||
           (Array.isArray(report.foto_data) &&
@@ -384,6 +387,21 @@ export async function deleteMapReport(id: number | string, jwt?: string) {
     '[Urbaly] Resposta do reporte excluído:',
     JSON.stringify(response.data),
   );
+  // Testado contra a API: sem JWT -> 400 "Token mal-formado"; JWT inválido ->
+  // 400 "Erro interno". Só com JWT válido de outro dono o backend chega na
+  // checagem de posse (401/403). Traduz tudo para mensagem acionável.
+  if (!response.ok && (response.status === 401 || response.status === 403)) {
+    return {
+      ...response,
+      data: 'Você só pode apagar os seus próprios reportes. Entre com a conta que criou este registro.',
+    };
+  }
+  if (!response.ok && typeof response.data === 'string' && /token mal-formado/i.test(response.data)) {
+    return {
+      ...response,
+      data: 'Você precisa entrar com sua conta Google para apagar reportes.',
+    };
+  }
   return response;
 }
 

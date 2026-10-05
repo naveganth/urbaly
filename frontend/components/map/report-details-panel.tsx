@@ -19,11 +19,13 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isDeveloperUser } from '@/lib/auth';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button, buttonVariants } from '@/components/ui/shadcn/button';
 import { Separator } from '@/components/ui/shadcn/separator';
 import { SPRING_DEFAULT } from '@/components/ui/smoothui/animation';
 import { CategoryIcon } from './category-icon';
+import { usePublicUser } from './use-public-user';
 import { CATEGORIES, type ReportStatus, type StreetReport } from './types';
 
 const STATUS_CONFIG: Record<
@@ -86,6 +88,91 @@ interface ReportDetailsPanelProps {
   images: string[];
   onClose: () => void;
   onUpvote: (reportId: string) => void;
+}
+
+/** Seção do autor com dados públicos (`GET /v1/auth/usuario`). */
+function ReportAuthor({ report }: { report: StreetReport }) {
+  const author = usePublicUser(report.authorId);
+
+  if (author.status === 'loading') {
+    return (
+      <div className="flex items-center gap-3" aria-label="Carregando autor">
+        <div aria-hidden className="size-10 shrink-0 animate-pulse rounded-full bg-muted" />
+        <div aria-hidden className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="h-3.5 w-2/3 animate-pulse rounded bg-muted" />
+          <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
+    );
+  }
+
+  if (author.status === 'loaded') {
+    const name =
+      (typeof author.user.nome === 'string' && author.user.nome.trim()) ||
+      (typeof author.user.name === 'string' && author.user.name.trim()) ||
+      report.reportedBy ||
+      'Cidadão';
+    const picture =
+      (typeof author.user.picture === 'string' && author.user.picture.trim()) ||
+      (typeof author.user.foto === 'string' && author.user.foto.trim()) ||
+      undefined;
+    const isDev = isDeveloperUser(author.user.id);
+    const title = isDev ? 'Desenvolvedor' : report.reporterTitle || 'Cidadão';
+    return (
+      <div className="flex items-center gap-3">
+        {picture ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={picture}
+            alt={`Foto de ${name}`}
+            className={cn(
+              'size-10 shrink-0 rounded-full border object-cover',
+              isDev && 'border-primary shadow-[0_0_0_2px_var(--primary)]'
+            )}
+            loading="lazy"
+          />
+        ) : (
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+            <User className="size-5 text-muted-foreground" />
+          </span>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={cn(
+                'truncate text-sm font-semibold text-foreground',
+                isDev && 'dev-name-effect font-bold'
+              )}
+            >
+              {name}
+            </span>
+            {isDev && (
+              <span className="shrink-0 rounded-full bg-gradient-to-r from-primary to-amber-500 px-1.5 py-px text-[10px] font-bold tracking-wide text-white">
+                DEV
+              </span>
+            )}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">{title}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+        <User className="size-5 text-muted-foreground" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-semibold text-foreground">
+          {report.reportedBy || 'Cidadão'}
+        </span>
+        {report.reporterTitle && (
+          <span className="truncate text-xs text-muted-foreground">{report.reporterTitle}</span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function ReportDetailsPanel({ report, images, onClose, onUpvote }: ReportDetailsPanelProps) {
@@ -336,12 +423,11 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
 
         <Separator className="my-3" />
 
-        <div className="flex items-center gap-1.5 pb-1 text-xs text-muted-foreground">
-          <User className="size-3.5 shrink-0" />
-          <span className="truncate">
-            Por {report.reportedBy || 'Cidadão'}
-            {report.reporterTitle ? ` · ${report.reporterTitle}` : ''}
-          </span>
+        <div className="pb-1">
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            Reportado por
+          </p>
+          <ReportAuthor report={report} />
         </div>
       </div>
     </PanelShell>

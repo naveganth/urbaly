@@ -92,7 +92,7 @@ function isFetchableReportId(id: string): boolean {
 
 export default function Map() {
   const { resolvedTheme } = useTheme();
-  const { jwt } = useAuth();
+  const { jwt, user } = useAuth();
   const [hasMounted, setHasMounted] = React.useState(false);
   const isDark = hasMounted && resolvedTheme === 'dark';
 
@@ -148,6 +148,10 @@ export default function Map() {
                 : report.foto_data?.map((image) => `data:image/webp;base64,${image}`) ?? [],
               createdAt: report.data_criacao,
               updatedAt: report.data_atualizacao,
+              authorId:
+                typeof report.id_user === 'number' && report.id_user > 0
+                  ? report.id_user
+                  : undefined,
               status: 'open',
               upvotes: 0,
             }))
@@ -636,6 +640,10 @@ export default function Map() {
   // Backend errors are terse; expand the known ones, keeping the original text searchable.
   const translateReportError = (error: string | undefined): string => {
     if (!error) return 'Não foi possível enviar o reporte.';
+    if (/token mal-formado|não autenticado|unauthorized|\b401\b|\b403\b/i.test(error))
+      return 'Você precisa entrar com sua conta Google para enviar reportes. Toque em Entrar no menu e tente de novo.';
+    if (/erro interno/i.test(error))
+      return 'Sua sessão expirou ou é inválida. Saia e entre de novo para enviar o reporte.';
     if (/cloudflare|bad gateway|origin.*(overload|misconfig)|error 502|\b502\b/i.test(error))
       return 'O servidor está indisponível no momento (erro 502). Aguarde cerca de 1 minuto e tente de novo — seus dados e fotos estão preservados.';
     if (/muito grandes/i.test(error))
@@ -649,6 +657,13 @@ export default function Map() {
   const handleAddReport = async (
     newReportData: Omit<StreetReport, 'id' | 'createdAt' | 'upvotes' | 'status'>
   ) => {
+    // O backend exige Authorization: Bearer desde a ativação do auth (testado:
+    // POST sem JWT -> 400 "Token mal-formado"). Barra cedo com mensagem clara.
+    if (!jwt) {
+      throw new Error(
+        'Você precisa entrar com sua conta Google para enviar reportes. Toque em Entrar no menu e tente de novo.'
+      );
+    }
     let createdId: string | undefined;
 
     const res = await createMapReport(
@@ -659,7 +674,7 @@ export default function Map() {
         ponto: newReportData.coordinates,
         fotoData: newReportData.images,
       },
-      jwt ?? undefined,
+      jwt,
     );
 
     if (res.success && res.id) {
@@ -675,6 +690,11 @@ export default function Map() {
       createdAt: new Date().toISOString(),
       status: 'open',
       upvotes: 0,
+      authorId: typeof user?.id === 'number' ? user.id : newReportData.authorId,
+      reportedBy:
+        (typeof user?.nome === 'string' && user.nome) ||
+        (typeof user?.name === 'string' && user.name) ||
+        newReportData.reportedBy,
     };
 
     // Dynamically update coordinates in React state array -> markers appear without refresh!

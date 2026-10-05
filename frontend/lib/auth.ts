@@ -11,6 +11,16 @@ export interface UrbalyUser {
 export const JWT_STORAGE_KEY = "urbaly:jwt";
 export const USER_STORAGE_KEY = "urbaly:user";
 
+/**
+ * Ids dos desenvolvedores do projeto (título "Desenvolvedor" + efeito no nome).
+ * 1 = Lucas Navegante (confirmado via GET /v1/auth/usuario).
+ */
+export const DEVELOPER_USER_IDS: readonly number[] = [1];
+
+export function isDeveloperUser(id: unknown): boolean {
+  return typeof id === "number" && DEVELOPER_USER_IDS.includes(id);
+}
+
 /** 5 minutos de tolerância no passado, conforme backend. */
 const EXP_SKEW_SECONDS = 5 * 60;
 

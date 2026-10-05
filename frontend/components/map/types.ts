@@ -27,6 +27,8 @@ export interface StreetReport {
   upvotes: number;
   reportedBy?: string;
   reporterTitle?: string;
+  /** Id do autor no backend (`id_user`). Ausente ou 0 = anônimo/legado. */
+  authorId?: number;
   updatedAt?: string;
 }
 

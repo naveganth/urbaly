@@ -505,3 +505,34 @@ img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-shimmer,
     @apply font-sans;
   }
 }
+
+/* Nome de desenvolvedor: brilho varrendo o texto em gradiente. */
+@keyframes dev-name-shine {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.dev-name-effect {
+  background: linear-gradient(
+    110deg,
+    var(--primary) 20%,
+    color-mix(in oklch, var(--primary), white 55%) 40%,
+    var(--primary) 60%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: dev-name-shine 3s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dev-name-effect {
+    animation: none;
+  }
+}
