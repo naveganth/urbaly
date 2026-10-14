@@ -197,6 +197,7 @@ export function Navbar({
               variant="default"
               size="sm"
               render={<Link href="/login" />}
+              nativeButton={false}
               className="min-h-9 touch-manipulation px-4 text-sm"
             >
               Entrar
