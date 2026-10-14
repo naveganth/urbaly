@@ -5,14 +5,25 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTheme } from '@/components/theme-provider';
 import {
+  Search,
   X,
   CircleAlert,
   Crosshair,
+  SlidersHorizontal,
   Info,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import { SearchFilters } from './search-filters';
+import { Input } from '@/components/ui/shadcn/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/shadcn/dropdown-menu';
 import { createMapReport, getMapReports, getReportImages } from '@/app/actions/api';
 import { useAuth } from '@/lib/auth-context';
 import { AnimatePresence } from 'motion/react';
@@ -20,7 +31,9 @@ import { INITIAL_REPORTS } from '@/data/mock-reports';
 import {
   StreetReport,
   ReportCategory,
+  ReportStatus,
   CATEGORIES,
+  CATEGORY_ORDER,
   categoryFromApi,
   categoryToApi,
   REPORT_IMAGE_CDN,
@@ -32,9 +45,10 @@ import {
   peekCachedReportImages,
   storeCachedReportImages,
 } from './use-report-images';
-
+import { CategoryIcon } from './category-icon';
 import { MapMarker } from './map-marker';
 import { createPlacementMarkerElement } from './placement-pin';
+import { fetchGoogleLikeStyle, getCartoBaseStyleUrl } from './google-maps-style';
 
 function getCartoApiKey() {
   return (
@@ -45,9 +59,7 @@ function getCartoApiKey() {
 }
 
 function getCartoVectorStyle(isDark: boolean) {
-  const base = isDark
-    ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-    : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+  const base = getCartoBaseStyleUrl(isDark);
   const apiKey = getCartoApiKey();
   return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
 }
@@ -188,11 +200,13 @@ export default function Map() {
   // Search and filter state
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<ReportCategory | 'all'>('all');
+  const [selectedStatus, setSelectedStatus] = React.useState<ReportStatus | 'all'>('all');
 
   // Filter reports reactively
   const filteredReports = React.useMemo(() => {
     return reports.filter((report) => {
       const matchesCategory = selectedCategory === 'all' || report.category === selectedCategory;
+      const matchesStatus = selectedStatus === 'all' || report.status === selectedStatus;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -201,11 +215,21 @@ export default function Map() {
         report.address.toLowerCase().includes(q) ||
         (report.neighborhood && report.neighborhood.toLowerCase().includes(q));
 
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesStatus && matchesSearch;
     });
-  }, [reports, selectedCategory, searchQuery]);
+  }, [reports, selectedCategory, selectedStatus, searchQuery]);
 
-  const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim().length > 0;
+  // Statistics calculation
+  const stats = React.useMemo(() => {
+    const total = reports.length;
+    const open = reports.filter((r) => r.status === 'open').length;
+    const investigating = reports.filter((r) => r.status === 'investigating').length;
+    const resolved = reports.filter((r) => r.status === 'resolved').length;
+    return { total, open, investigating, resolved };
+  }, [reports]);
+
+  const hasActiveFilters =
+    selectedCategory !== 'all' || selectedStatus !== 'all' || searchQuery.trim().length > 0;
 
   // True while any visible photo pin is still waiting on its CDN thumbnail —
   // drives the skeleton shimmer on markers and the legend loading hint.
@@ -284,9 +308,9 @@ export default function Map() {
     };
   }, [showPhotoPins, filteredReports, photoThumbs, thumbFailed]);
 
-  // Last vector style URL applied to the map. Compared inside effects so the
+  // Last theme applied to the basemap. Compared inside effects so the
   // theme effect never re-applies the style the map was just constructed with.
-  const appliedStyleRef = React.useRef<string | null>(null);
+  const appliedStyleRef = React.useRef<boolean | null>(null);
   // Safety-net timer so the UI can never spin forever: cleared on load/error.
   const loadTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -301,14 +325,16 @@ export default function Map() {
     if (!apiKey) {
       console.warn(
         '[Urbaly Map] NEXT_PUBLIC_CARTO_API_KEY is missing. ' +
-          'Restart `next dev` after creating frontend/.env.local. ' +
-          'Falling back to the keyless CARTO style.'
+        'Restart `next dev` after creating frontend/.env.local. ' +
+        'Falling back to the keyless CARTO style.'
       );
     }
     // NOTE: isDark is intentionally read once here; live theme switches are
     // handled by the [isDark] effect via map.setStyle.
-    const initialStyle = getCartoVectorStyle(isDark);
-    appliedStyleRef.current = initialStyle;
+    const initialIsDark = isDark;
+    const initialStyle = getCartoVectorStyle(initialIsDark);
+    appliedStyleRef.current = initialIsDark;
+    let cancelled = false;
 
     const clearLoadTimeout = () => {
       if (loadTimeoutRef.current) {
@@ -376,6 +402,19 @@ export default function Map() {
     }
 
     mapRef.current = map;
+
+    // Upgrade the CARTO base style to the user-palette repaint once the
+    // patched style JSON resolves. The map boots instantly on the base URL;
+    // this swaps colors in place (markers survive setStyle).
+    void fetchGoogleLikeStyle(initialIsDark, apiKey).then((googleStyle) => {
+      if (cancelled) return;
+      if (typeof googleStyle !== 'object' || googleStyle === null) return;
+      try {
+        map.setStyle(googleStyle as unknown as string);
+      } catch (styleError) {
+        console.warn('[Urbaly Map] Palette style apply failed, keeping base style:', styleError);
+      }
+    });
 
     // Mobile safety: URL-bar changes, rotation, and zero-size first paints
     // can leave the canvas mis-sized — keep the map synced to its container.
@@ -465,8 +504,8 @@ export default function Map() {
       if (!mapLoadedRef.current) {
         console.error(
           '[Urbaly Map] Style load timed out after 20s. ' +
-            `Style: ${initialStyle.split('?')[0]} | key present: ${apiKey ? 'yes' : 'no'} | ` +
-            `style arrived: ${styleArrived ? 'yes' : 'no'}`
+          `Style: ${initialStyle.split('?')[0]} | key present: ${apiKey ? 'yes' : 'no'} | ` +
+          `style arrived: ${styleArrived ? 'yes' : 'no'}`
         );
         setIsMapLoading(false);
         setMapError(
@@ -491,6 +530,7 @@ export default function Map() {
     );
 
     return () => {
+      cancelled = true;
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current);
         loadTimeoutRef.current = null;
@@ -503,19 +543,26 @@ export default function Map() {
       map.remove();
       mapRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapRetryKey]);
 
-  // Update vector basemap style on dark mode change without recreating the map.
+  // Update user-palette basemap on dark mode change without recreating the map.
   // DOM markers (MapMarker / placement pin) survive setStyle, so no state is lost.
   // Works before 'load' too: setStyle simply swaps the pending style request.
   React.useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const nextStyle = getCartoVectorStyle(isDark);
-    if (appliedStyleRef.current === nextStyle) return;
-    appliedStyleRef.current = nextStyle;
-    map.setStyle(nextStyle);
+    if (appliedStyleRef.current === isDark) return;
+    appliedStyleRef.current = isDark;
+    const apiKey = getCartoApiKey();
+    void fetchGoogleLikeStyle(isDark, apiKey).then((nextStyle) => {
+      if (mapRef.current !== map) return;
+      try {
+        map.setStyle(nextStyle as unknown as string);
+      } catch (styleError) {
+        console.warn('[Urbaly Map] Theme style apply failed:', styleError);
+      }
+    });
   }, [isDark]);
 
   // Handle map click for point placement mode
@@ -723,16 +770,149 @@ export default function Map() {
           isPlacementMode && 'placement-mode-active'
         )}
       >
-        {/* Floating search + filter card (Google Maps-style) */}
-        <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-3 md:top-3 md:w-[420px]">
-          <SearchFilters
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            reports={reports}
-            isDetailsLoading={isDetailsLoading}
-          />
+        {/* Floating search card */}
+        <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-3 md:top-3 md:w-[392px]">
+          <div
+            role="search"
+            className="flex items-center gap-1.5 rounded-2xl border border-border/70 bg-background/95 py-1.5 pl-1.5 pr-2 shadow-xl backdrop-blur-md dark:bg-zinc-900/95"
+          >
+            <div className="relative min-w-0 flex-1">
+              {isDetailsLoading ? (
+                <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-primary" />
+              ) : (
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              )}
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isDetailsLoading ? 'Carregando ocorrência…' : 'Buscar por rua, bairro ou problema...'}
+                aria-busy={isDetailsLoading}
+                aria-label="Buscar ocorrências"
+                className="h-11 rounded-xl border-0 bg-transparent pl-9 text-sm shadow-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-primary/30"
+              />
+              {isDetailsLoading ? (
+                <span role="status" aria-live="polite" className="sr-only">
+                  Carregando ocorrência
+                </span>
+              ) : (
+                searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Limpar busca"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )
+              )}
+            </div>
+
+            {/* Status Dropdown Filter */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="hidden h-11 w-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:inline-flex" aria-label="Filtrar por status">
+                <span className="relative flex items-center justify-center">
+                  <SlidersHorizontal className="size-4" />
+                  {selectedStatus !== 'all' && (
+                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />
+                  )}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="text-xs">
+                <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
+                  Todos os status
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('open')}>
+                  Em Aberto
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>
+                  Em Análise
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>
+                  Resolvidos
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Mobile filters (status + categories) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-11 w-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:hidden" aria-label="Abrir filtros">
+                <span className="relative flex items-center justify-center">
+                  <SlidersHorizontal className="size-4" />
+                  {(selectedStatus !== 'all' || selectedCategory !== 'all') && (
+                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />
+                  )}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[min(28rem,70vh)] w-64 overflow-y-auto text-xs">
+                <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>Todos os status</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('open')}>Em aberto</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>Em análise</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>Resolvidos</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Filtrar por categoria</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setSelectedCategory('all')}>
+                  Todas as categorias ({reports.length})
+                </DropdownMenuItem>
+                {CATEGORY_ORDER.map((catKey) => (
+                  <DropdownMenuItem key={catKey} onClick={() => setSelectedCategory(catKey)}>
+                    <CategoryIcon category={catKey} className="size-3.5" />
+                    {CATEGORIES[catKey].label} ({reports.filter((r) => r.category === catKey).length})
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Category chips — scrollable row under the card, hidden while a report is open */}
+          <div
+            className={cn(
+              'mt-2 items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none',
+              selectedReport ? 'hidden' : 'flex'
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('all')}
+              className={cn(
+                'shrink-0 cursor-pointer touch-manipulation whitespace-nowrap rounded-full border px-3 py-2 text-xs font-medium shadow-md backdrop-blur-md transition-[background-color,border-color,color] duration-150',
+                selectedCategory === 'all'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border/70 bg-background/95 text-muted-foreground hover:bg-muted dark:bg-zinc-900/95'
+              )}
+            >
+              Todas ({reports.length})
+            </button>
+
+            {CATEGORY_ORDER.map((catKey) => {
+              const cat = CATEGORIES[catKey];
+              const count = reports.filter((r) => r.category === catKey).length;
+              const isSelected = selectedCategory === catKey;
+
+              return (
+                <button
+                  key={catKey}
+                  type="button"
+                  onClick={() => setSelectedCategory(isSelected ? 'all' : catKey)}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    'flex shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-xs font-medium shadow-md backdrop-blur-md transition-[background-color,border-color,color] duration-150',
+                    isSelected
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border/70 bg-background/95 text-muted-foreground hover:bg-muted dark:bg-zinc-900/95'
+                  )}
+                >
+                  <CategoryIcon category={catKey} className="size-3.5" />
+                  <span>{cat.label}</span>
+                  <span className="font-mono text-[10px] tabular-nums opacity-75">({count})</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {isMapLoading && !mapError && (
@@ -791,6 +971,19 @@ export default function Map() {
             <span className="leading-tight">no mapa</span>
           </div>
           <span className="h-3 w-px bg-border" />
+          <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+            <span className="size-2 rounded-full bg-amber-500" />
+            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.open}</span> abertos</span>
+          </div>
+          <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+            <span className="size-2 rounded-full bg-sky-500" />
+            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.investigating}</span> em análise</span>
+          </div>
+          <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+            <span className="size-2 rounded-full bg-emerald-500" />
+            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.resolved}</span> resolvidos</span>
+          </div>
+          <span className="h-3 w-px bg-border" />
           <div
             role="status"
             aria-live="polite"
@@ -807,7 +1000,7 @@ export default function Map() {
               )}
             />
             <span>
-              {showPhotoPins ? (thumbsLoading ? 'Carregando fotos...' : 'Modo foto') : 'Aproxime para ver fotos'}
+              {showPhotoPins ? (thumbsLoading ? 'Carregando fotos…' : 'Modo foto') : 'Aproxime para ver fotos'}
             </span>
           </div>
         </div>
@@ -818,33 +1011,34 @@ export default function Map() {
           !isReportsLoading &&
           !mapError &&
           !reportsError && (
-          <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
-            <div className="flex max-w-sm flex-col items-center gap-2 rounded-md border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
-              <Info className="size-4 text-amber-500" />
-              <span>
-                {hasActiveFilters
-                  ? 'Nenhum problema encontrado com estes filtros.'
-                  : 'Ainda não há problemas registrados nesta área.'}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (hasActiveFilters) {
-                    setSearchQuery('');
-                    setSelectedCategory('all');
-                  } else {
-                    setIsPlacementMode(true);
-                  }
-                }}
-                className="mt-1 h-9 rounded-md px-3 text-xs"
-              >
-                {hasActiveFilters ? 'Limpar filtros' : 'Reportar um problema'}
-              </Button>
+            <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
+              <div className="flex max-w-sm flex-col items-center gap-2 rounded-md border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
+                <Info className="size-4 text-amber-500" />
+                <span>
+                  {hasActiveFilters
+                    ? 'Nenhum problema encontrado com estes filtros.'
+                    : 'Ainda não há problemas registrados nesta área.'}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (hasActiveFilters) {
+                      setSearchQuery('');
+                      setSelectedCategory('all');
+                      setSelectedStatus('all');
+                    } else {
+                      setIsPlacementMode(true);
+                    }
+                  }}
+                  className="mt-1 h-9 rounded-md px-3 text-xs"
+                >
+                  {hasActiveFilters ? 'Limpar filtros' : 'Reportar um problema'}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Dynamic Map Markers mapped directly from React State Array without full page reload */}
         {mapInstance &&
@@ -901,7 +1095,7 @@ export default function Map() {
           className={cn(
             'absolute bottom-16 right-3 z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-all duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
             selectedReport &&
-              'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
+            'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
             isPlacementMode
               ? 'bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600'
               : 'bg-primary text-primary-foreground shadow-primary/30 hover:bg-primary/90'
