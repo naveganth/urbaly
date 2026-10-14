@@ -114,12 +114,6 @@
   transform: translateY(-2px) scale(1.08);
 }
 
-/* Glyphs are painted at 14px and centered in the 20px disc box. */
-.google-pin-glyph svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* Selected report pin lifts above neighbours with a soft ring glow. */
 .adaptive-marker.is-selected {
   z-index: 40;

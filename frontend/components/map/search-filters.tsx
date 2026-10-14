@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Check, LayoutGrid, Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/shadcn/input';
@@ -28,9 +29,10 @@ interface SearchFiltersProps {
 }
 
 /**
- * Google Maps-style search + category filter in a single card.
+ * Search + category dropdown in a single floating card.
  *
- * Search field plus one filter button that opens the category list.
+ * One filter button opens a clean category list with refined type scale:
+ * small-caps section label, 13px medium item labels, tinted icon tiles.
  * The list is driven by CATEGORY_ORDER, so new categories need no UI change.
  */
 export function SearchFilters({
@@ -65,7 +67,7 @@ export function SearchFilters({
           placeholder={isLoading ? 'Carregando ocorrência…' : 'Buscar no mapa...'}
           aria-busy={isLoading}
           aria-label="Buscar ocorrências"
-          className="h-10 rounded-full border-0 bg-transparent pl-9 text-sm shadow-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="h-10 rounded-full border-0 bg-transparent pl-9 text-sm tracking-[-0.01em] shadow-none focus-visible:ring-2 focus-visible:ring-primary/30"
         />
         {!isLoading && searchQuery ? (
           <button
@@ -91,17 +93,35 @@ export function SearchFilters({
             hasActiveCategory ? `Filtro: ${activeInfo?.label}. Abrir categorias` : 'Filtrar por categoria'
           }
           className={cn(
-            'relative flex size-10 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
+            'relative flex size-10 shrink-0 cursor-pointer touch-manipulation items-center justify-center overflow-hidden rounded-full outline-none transition-colors duration-200 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
             hasActiveCategory ? 'bg-primary/10 text-foreground' : 'text-muted-foreground'
           )}
         >
-          {hasActiveCategory && activeInfo ? (
-            <span className={cn('rounded-md p-1', activeInfo.bgLight, activeInfo.color)}>
-              <CategoryIcon category={selectedCategory as ReportCategory} className="size-4" />
-            </span>
-          ) : (
-            <SlidersHorizontal className="size-4" />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {hasActiveCategory && activeInfo ? (
+              <motion.span
+                key={selectedCategory}
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className={cn('rounded-md p-1', activeInfo.bgLight, activeInfo.color)}
+              >
+                <CategoryIcon category={selectedCategory as ReportCategory} className="size-4" />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="all"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="flex items-center justify-center"
+              >
+                <SlidersHorizontal className="size-4" />
+              </motion.span>
+            )}
+          </AnimatePresence>
           {hasActiveCategory ? (
             <span
               aria-hidden
@@ -113,22 +133,27 @@ export function SearchFilters({
         <DropdownMenuContent
           align="end"
           sideOffset={8}
-          className="max-h-[72vh] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-lg p-1 text-xs shadow-xl"
+          className="max-h-[72vh] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border-border/70 p-1.5 shadow-xl"
         >
-          <DropdownMenuLabel className="px-2 pt-1 text-[11px] font-semibold tracking-wide uppercase">
+          <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
             Categorias
           </DropdownMenuLabel>
-          <DropdownMenuSeparator />
+          <DropdownMenuSeparator className="mx-1 mb-1" />
 
           <DropdownMenuItem
             onClick={() => onCategoryChange('all')}
-            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2"
+            className={cn(
+              'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150',
+              !hasActiveCategory && 'bg-accent/60'
+            )}
           >
             <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
               <LayoutGrid className="size-3" />
             </span>
-            <span className="min-w-0 flex-1 truncate font-medium">Todas</span>
-            {!hasActiveCategory ? <Check className="size-3.5 shrink-0 text-primary" /> : null}
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]">
+              Todas
+            </span>
+            {!hasActiveCategory ? <Check className="size-4 shrink-0 text-primary" /> : null}
           </DropdownMenuItem>
 
           {CATEGORY_ORDER.map((catKey) => {
@@ -138,7 +163,10 @@ export function SearchFilters({
               <DropdownMenuItem
                 key={catKey}
                 onClick={() => onCategoryChange(isSelected ? 'all' : catKey)}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2"
+                className={cn(
+                  'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150',
+                  isSelected && 'bg-accent/60'
+                )}
               >
                 <span
                   className={cn(
@@ -149,8 +177,10 @@ export function SearchFilters({
                 >
                   <CategoryIcon category={catKey} className="size-3" />
                 </span>
-                <span className="min-w-0 flex-1 truncate font-medium">{info.label}</span>
-                {isSelected ? <Check className="size-3.5 shrink-0 text-primary" /> : null}
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]">
+                  {info.label}
+                </span>
+                {isSelected ? <Check className="size-4 shrink-0 text-primary" /> : null}
               </DropdownMenuItem>
             );
           })}
