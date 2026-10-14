@@ -106,8 +106,8 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
       <span class="js-photo-count absolute -top-1 -right-1 items-center justify-center rounded-full border border-border bg-card px-1 font-mono text-[10px] font-semibold tabular-nums text-card-foreground shadow-md ${extraCount > 0 ? 'flex h-5 min-w-5' : 'hidden'}">+${extraCount}</span>
       <span class="absolute bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-zinc-950" style="background: ${ringColor};"></span>
     </div>
-    <div class="pointer-events-none absolute bottom-[calc(100%_+_12px)] left-1/2 z-50 hidden w-60 -translate-x-1/2 translate-y-1 opacity-0 transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 md:block"
-      role="tooltip">
+    <div class="pointer-events-none absolute bottom-[calc(100%_+_12px)] left-1/2 z-50 hidden w-60 -translate-x-1/2 translate-y-1 opacity-0 transition-[transform,opacity] duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 md:block"
+      aria-hidden="true">
       <div class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl">
         <div class="flex items-center gap-2.5 border-b border-border/60 bg-muted/40 p-2.5">
           <span class="relative block h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">

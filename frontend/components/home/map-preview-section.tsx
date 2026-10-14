@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { MapPinned, Maximize2, X } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import Map from "@/components/map/map"
@@ -12,17 +12,18 @@ interface MapPreviewSectionProps {
 }
 
 export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProps) {
+  const shouldReduceMotion = useReducedMotion()
   return (
     <AnimatePresence>
       <motion.section
-        layout
+        layout={!shouldReduceMotion}
         aria-label="Mapa de ocorrências"
         className={
           isMapOpen
             ? "fixed inset-0 z-50 flex h-dvh min-h-0 flex-col overflow-y-auto bg-background text-foreground"
             : "relative flex min-h-72 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40 shadow-xs sm:min-h-96"
         }
-        transition={{ layout: { duration: 0.5, ease: [0.32, 0.72, 0, 1] } }}
+        transition={shouldReduceMotion ? { duration: 0 } : { layout: { duration: 0.5, ease: [0.32, 0.72, 0, 1] } }}
       >
         {isMapOpen ? (
           <div className="w-full min-h-full p-4 sm:p-6 md:p-8 flex flex-col">

@@ -2,6 +2,7 @@
 
 import http from 'http';
 import https from 'https';
+import { getServerEnv } from '@/lib/env';
 
 interface AuthResponse {
   ok: boolean;
@@ -10,12 +11,7 @@ interface AuthResponse {
   error?: string;
 }
 
-const PRIMARY_AUTH_BASE_URL =
-  process.env.AUTH_BASE_URL ||
-  process.env.NEXT_PUBLIC_AUTH_URL ||
-  process.env.NEXT_PUBLIC_API_URL?.replace('/v1/db', '/v1/auth') ||
-  process.env.API_BASE_URL?.replace('/v1/db', '/v1/auth') ||
-  'http://localhost:8080/v1/auth';
+const PRIMARY_AUTH_BASE_URL = getServerEnv().authBaseUrl;
 const FALLBACK_AUTH_BASE_URL = 'https://urbaly.gabrielataide.com/v1/auth';
 
 function extractErrorMessage(data: unknown, fallback: string): string {

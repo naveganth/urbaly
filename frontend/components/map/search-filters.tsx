@@ -69,14 +69,14 @@ export function SearchFilters({
           placeholder={isLoading ? 'Carregando ocorrência…' : 'Buscar no mapa...'}
           aria-busy={isLoading}
           aria-label="Buscar ocorrências"
-          className="h-10 rounded-full border-0 bg-transparent pl-9 text-sm tracking-[-0.01em] shadow-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="h-11 rounded-full border-0 bg-transparent pl-9 text-sm tracking-[-0.01em] shadow-none focus-visible:ring-2 focus-visible:ring-primary/30"
         />
         {!isLoading && searchQuery ? (
           <button
             type="button"
             onClick={() => onSearchChange('')}
             aria-label="Limpar busca"
-            className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground before:absolute before:-inset-2 before:content-['']"
           >
             <X className="size-4" />
           </button>
@@ -98,7 +98,7 @@ export function SearchFilters({
               : 'Filtrar por categoria'
           }
           className={cn(
-            'relative inline-flex h-10 shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium outline-none transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
+            'relative inline-flex h-11 shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium outline-none transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
             hasActiveCategory
               ? 'bg-primary/10 text-foreground ring-1 ring-primary/30'
               : 'text-muted-foreground'
@@ -128,12 +128,12 @@ export function SearchFilters({
             <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
               <LayoutGrid className="size-3" />
             </span>
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]">
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]" title="Todas">
               Todas
             </span>
             {categoryCounts ? (
               <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                {Object.values(categoryCounts).reduce((sum, n) => sum + n, 0)}
+                {new Intl.NumberFormat('pt-BR').format(Object.values(categoryCounts).reduce((sum, n) => sum + n, 0))}
               </span>
             ) : null}
             {!hasActiveCategory ? <Check className="size-4 shrink-0 text-primary" /> : null}
@@ -160,12 +160,12 @@ export function SearchFilters({
                 >
                   <CategoryIcon category={catKey} className="size-3" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]" title={info.label}>
                   {info.label}
                 </span>
                 {categoryCounts ? (
                   <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                    {categoryCounts[catKey] ?? 0}
+                    {new Intl.NumberFormat('pt-BR').format(categoryCounts[catKey] ?? 0)}
                   </span>
                 ) : null}
                 {isSelected ? <Check className="size-4 shrink-0 text-primary" /> : null}

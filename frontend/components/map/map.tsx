@@ -36,18 +36,10 @@ import {
 import { MapMarker } from './map-marker';
 import { createPlacementMarkerElement } from './placement-pin';
 import { fetchGoogleLikeStyle, getCartoBaseStyleUrl } from './google-maps-style';
+import { usePublicConfig } from '@/lib/public-config';
 
-function getCartoApiKey() {
-  return (
-    process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_MAP_API_KEY?.trim() ||
-    ''
-  );
-}
-
-function getCartoVectorStyle(isDark: boolean) {
+function getCartoVectorStyle(isDark: boolean, apiKey: string) {
   const base = getCartoBaseStyleUrl(isDark);
-  const apiKey = getCartoApiKey();
   return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
 }
 
@@ -74,6 +66,19 @@ function getReportThumb(
 function isFetchableReportId(id: string): boolean {
   const numericId = parseInt(id, 10);
   return !isNaN(numericId) && numericId > 0;
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+const countFormat = new Intl.NumberFormat('pt-BR');
+function formatCount(value: number): string {
+  return countFormat.format(value);
 }
 
 export default function Map() {
@@ -183,10 +188,50 @@ export default function Map() {
   const isDetailsLoading = selectedReport !== null && !isDetailsReady;
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
+  // Delayed loader (avoids flash on fast boots) + slow-network hint.
+  const [showMapLoader, setShowMapLoader] = React.useState(false);
+  const [slowMap, setSlowMap] = React.useState(false);
 
-  // Search and filter state (Google Maps-style pills)
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedCategory, setSelectedCategory] = React.useState<ReportCategory | 'all'>('all');
+  React.useEffect(() => {
+    if (!isMapLoading || mapError) {
+      // Deferred out of the synchronous effect body.
+      queueMicrotask(() => {
+        setShowMapLoader(false);
+        setSlowMap(false);
+      });
+      return;
+    }
+    const flashTimer = window.setTimeout(() => setShowMapLoader(true), 200);
+    const slowTimer = window.setTimeout(() => setSlowMap(true), 8000);
+    return () => {
+      window.clearTimeout(flashTimer);
+      window.clearTimeout(slowTimer);
+    };
+  }, [isMapLoading, mapError]);
+
+  // Search and filter state (Google Maps-style pills). Initialized from the
+  // URL so result sets survive reload, back, and sharing.
+  const [searchQuery, setSearchQuery] = React.useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('q') ?? '';
+  });
+  const [selectedCategory, setSelectedCategory] = React.useState<ReportCategory | 'all'>(() => {
+    if (typeof window === 'undefined') return 'all';
+    const raw = new URLSearchParams(window.location.search).get('categoria');
+    return raw && (CATEGORY_ORDER as string[]).includes(raw) ? (raw as ReportCategory) : 'all';
+  });
+
+  // Keep the query + filters in the URL (shareable, back-button safe).
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.history?.replaceState !== 'function') return;
+    const params = new URLSearchParams(window.location.search);
+    if (searchQuery.trim()) params.set('q', searchQuery.trim());
+    else params.delete('q');
+    if (selectedCategory !== 'all') params.set('categoria', selectedCategory);
+    else params.delete('categoria');
+    const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    window.history.replaceState(null, '', next);
+  }, [searchQuery, selectedCategory]);
 
   // Filter reports reactively
   const filteredReports = React.useMemo(() => {
@@ -206,6 +251,32 @@ export default function Map() {
 
   const hasActiveFilters =
     selectedCategory !== 'all' || searchQuery.trim().length > 0;
+
+  // Current viewport bounds — drives marker virtualization so hundreds of
+  // reports never mount hundreds of MapLibre markers at once.
+  const [mapBounds, setMapBounds] = React.useState<{
+    south: number;
+    north: number;
+    west: number;
+    east: number;
+  } | null>(null);
+
+  // Visible markers: filtered reports inside the viewport, capped so the DOM
+  // stays cheap. The legend still counts all filtered reports.
+  const visibleReports = React.useMemo(() => {
+    const inView = !mapBounds
+      ? filteredReports
+      : filteredReports.filter((report) => {
+          const [lng, lat] = report.coordinates;
+          return (
+            lat >= mapBounds.south &&
+            lat <= mapBounds.north &&
+            lng >= mapBounds.west &&
+            lng <= mapBounds.east
+          );
+        });
+    return inView.length > 250 ? inView.slice(0, 250) : inView;
+  }, [filteredReports, mapBounds]);
 
   // Per-category occurrence counts for the filter rows.
   const categoryCounts = React.useMemo(() => {
@@ -302,25 +373,24 @@ export default function Map() {
   // Safety-net timer so the UI can never spin forever: cleared on load/error.
   const loadTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Public runtime config (CARTO key) served by /api/public-config.
+  // The map waits for it before initializing; missing key falls back to the
+  // keyless CARTO style (server logs the warning once).
+  const publicConfig = usePublicConfig();
+  const cartoApiKey = publicConfig?.cartoApiKey ?? '';
+
   // Initialize MapLibre (once per retry; theme switches go through setStyle below).
   React.useEffect(() => {
-    if (!mapContainerRef.current) return;
+    if (!mapContainerRef.current || !publicConfig) return;
 
     mapLoadedRef.current = false;
     setIsMapLoading(true);
     setMapError(null);
-    const apiKey = getCartoApiKey();
-    if (!apiKey) {
-      console.warn(
-        '[Urbaly Map] NEXT_PUBLIC_CARTO_API_KEY is missing. ' +
-        'Restart `next dev` after creating frontend/.env.local. ' +
-        'Falling back to the keyless CARTO style.'
-      );
-    }
+    const apiKey = cartoApiKey;
     // NOTE: isDark is intentionally read once here; live theme switches are
     // handled by the [isDark] effect via map.setStyle.
     const initialIsDark = isDark;
-    const initialStyle = getCartoVectorStyle(initialIsDark);
+    const initialStyle = getCartoVectorStyle(initialIsDark, apiKey);
     appliedStyleRef.current = initialIsDark;
     let cancelled = false;
 
@@ -441,16 +511,26 @@ export default function Map() {
       if (via !== 'load') console.info(`[Urbaly Map] Map ready via ${via}.`);
     };
 
-    // Track zoom from the start so pins can swap to circular CDN photo
-    // previews when very zoomed in. `zoomend`/`moveend` keep React renders
-    // cheap (no per-frame setState during pinch). The functional update only
-    // flips state when the hysteresis band is actually crossed.
+    // Track zoom + viewport from the start so pins can swap to circular CDN
+    // photo previews when very zoomed in and off-screen markers stay unmounted.
+    // `zoomend`/`moveend` keep React renders cheap (no per-frame setState).
     const syncZoom = () => {
       try {
         const zoom = map.getZoom();
         setShowPhotoPins((prev) => (prev ? zoom >= PHOTO_ZOOM_EXIT : zoom >= PHOTO_ZOOM_ENTER));
       } catch {
         // getZoom is a nicety; a failed read must never break the map.
+      }
+      try {
+        const b = map.getBounds();
+        setMapBounds({
+          south: b.getSouth(),
+          north: b.getNorth(),
+          west: b.getWest(),
+          east: b.getEast(),
+        });
+      } catch {
+        // Bounds read must never break the map.
       }
     };
     syncZoom();
@@ -532,17 +612,17 @@ export default function Map() {
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapRetryKey]);
+  }, [mapRetryKey, publicConfig]);
 
   // Update user-palette basemap on dark mode change without recreating the map.
   // DOM markers (MapMarker / placement pin) survive setStyle, so no state is lost.
   // Works before 'load' too: setStyle simply swaps the pending style request.
   React.useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !publicConfig) return;
     if (appliedStyleRef.current === isDark) return;
     appliedStyleRef.current = isDark;
-    const apiKey = getCartoApiKey();
+    const apiKey = cartoApiKey;
     void fetchGoogleLikeStyle(isDark, apiKey).then((nextStyle) => {
       if (mapRef.current !== map) return;
       try {
@@ -551,7 +631,7 @@ export default function Map() {
         console.warn('[Urbaly Map] Theme style apply failed:', styleError);
       }
     });
-  }, [isDark]);
+  }, [isDark, publicConfig, cartoApiKey]);
 
   // Handle map click for point placement mode
   React.useEffect(() => {
@@ -634,6 +714,10 @@ export default function Map() {
     if (!map || !selectedReport || !isDetailsReady) return;
     try {
       const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+      if (prefersReducedMotion()) {
+        map.jumpTo({ center: selectedReport.coordinates });
+        return;
+      }
       map.easeTo({
         center: selectedReport.coordinates,
         duration: 600,
@@ -646,6 +730,35 @@ export default function Map() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReport?.id, isDetailsReady]);
+
+  // Detail-view coverage: the open record names itself in the tab title.
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (!selectedReport) return;
+    const previous = document.title;
+    document.title = `${selectedReport.title} — Urbaly`;
+    return () => {
+      document.title = previous;
+    };
+    // Intentionally keyed on id so title/author updates don't re-run it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReport?.id]);
+
+  // Adjacent-record navigation through the filtered list (no list round-trip).
+  const selectedIndex = selectedReport
+    ? filteredReports.findIndex((report) => report.id === selectedReport.id)
+    : -1;
+  const handleSelectAdjacent = React.useCallback(
+    (direction: 1 | -1) => {
+      if (filteredReports.length === 0) return;
+      const next =
+        selectedIndex < 0
+          ? 0
+          : (selectedIndex + direction + filteredReports.length) % filteredReports.length;
+      setSelectedReport(filteredReports[next]);
+    },
+    [filteredReports, selectedIndex]
+  );
 
   // Backend errors are terse; expand the known ones, keeping the original text searchable.
   const translateReportError = (error: string | undefined): string => {
@@ -710,14 +823,18 @@ export default function Map() {
     // Dynamically update coordinates in React state array -> markers appear without refresh!
     setReports((previous) => [createdReport, ...previous]);
 
-    // Animate map fly-to
+    // Animate map fly-to (instant jump for reduced-motion users)
     if (mapRef.current) {
-      mapRef.current.flyTo({
-        center: newReportData.coordinates,
-        zoom: 15,
-        duration: 1200,
-        essential: true,
-      });
+      if (prefersReducedMotion()) {
+        mapRef.current.jumpTo({ center: newReportData.coordinates, zoom: 15 });
+      } else {
+        mapRef.current.flyTo({
+          center: newReportData.coordinates,
+          zoom: 15,
+          duration: 1200,
+          essential: true,
+        });
+      }
     }
 
     handleCancelPlacement();
@@ -753,6 +870,8 @@ export default function Map() {
       {/* Interactive Map Container — search + categories float Google Maps-style */}
       <div
         ref={mapContainerRef}
+        role="application"
+        aria-label="Mapa de ocorrências. Use Tab para navegar entre os marcadores e Enter para ver detalhes."
         className={cn(
           'relative w-full flex-1 min-h-0 overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow]',
           isPlacementMode && 'placement-mode-active'
@@ -768,9 +887,49 @@ export default function Map() {
             categoryCounts={categoryCounts}
             isLoading={isDetailsLoading}
           />
+          {hasActiveFilters && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
+              {selectedCategory !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('all')}
+                  aria-label={`Remover filtro ${CATEGORIES[selectedCategory]?.label ?? selectedCategory}`}
+                  className="inline-flex h-8 cursor-pointer touch-manipulation items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 text-[11px] font-medium text-foreground backdrop-blur-md transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="max-w-40 truncate" title={CATEGORIES[selectedCategory]?.label ?? selectedCategory}>
+                    {CATEGORIES[selectedCategory]?.label ?? selectedCategory}
+                  </span>
+                  <X className="size-3 shrink-0" aria-hidden="true" />
+                </button>
+              )}
+              {searchQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={`Remover busca ${searchQuery.trim()}`}
+                  className="inline-flex h-8 max-w-full cursor-pointer touch-manipulation items-center gap-1.5 rounded-full border border-border/70 bg-background/95 px-2.5 text-[11px] font-medium text-foreground backdrop-blur-md transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="max-w-40 truncate" title={searchQuery.trim()}>
+                    “{searchQuery.trim()}”
+                  </span>
+                  <X className="size-3 shrink-0" aria-hidden="true" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('all');
+                }}
+                className="h-8 cursor-pointer touch-manipulation rounded-full px-2 text-[11px] font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Limpar tudo
+              </button>
+            </div>
+          )}
         </div>
 
-        {isMapLoading && !mapError && (
+        {showMapLoader && !mapError && (
           <div
             role="status"
             aria-live="polite"
@@ -779,6 +938,11 @@ export default function Map() {
           >
             <div className="h-10 w-10 animate-pulse rounded-md border border-border/70 bg-card shadow-sm" />
             <span className="text-xs font-medium text-muted-foreground">Carregando mapa…</span>
+            {slowMap && (
+              <span className="text-[11px] text-muted-foreground">
+                Ainda carregando — sua rede parece lenta. Aguarde um pouco mais.
+              </span>
+            )}
           </div>
         )}
 
@@ -804,9 +968,9 @@ export default function Map() {
 
         {/* Placement Mode Top Overlay Banner — sits below the floating search */}
         {isPlacementMode && (
-          <div className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[116px] dark:bg-zinc-900/95">
-            <span className="flex size-2 rounded-full bg-primary animate-ping" />
-            <Crosshair className="size-4 text-primary" />
+          <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[116px] dark:bg-zinc-900/95">
+            <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
+            <Crosshair aria-hidden="true" className="size-4 text-primary" />
             <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
             <button
               type="button"
@@ -820,10 +984,13 @@ export default function Map() {
         )}
 
         {/* Bottom Legend — count + photo-mode hint (no status breakdown) */}
-        <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/80 bg-background/90 px-3.5 py-2 text-[11px] shadow-lg backdrop-blur-md sm:right-auto sm:flex-nowrap sm:py-1.5 dark:bg-zinc-900/90">
+        <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/80 bg-background/90 px-3.5 py-2 text-[11px] shadow-lg backdrop-blur-md sm:right-auto sm:flex-nowrap sm:py-1.5 dark:bg-zinc-900/90">
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="font-mono font-semibold tabular-nums text-foreground">{filteredReports.length}</span>
+            <span className="font-mono font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
             <span className="leading-tight">no mapa</span>
+            {visibleReports.length < filteredReports.length && (
+              <span className="leading-tight">· {formatCount(visibleReports.length)} visíveis</span>
+            )}
           </div>
           <span className="h-3 w-px bg-border" />
           <div
@@ -881,9 +1048,10 @@ export default function Map() {
             </div>
           )}
 
-        {/* Dynamic Map Markers mapped directly from React State Array without full page reload */}
+        {/* Dynamic Map Markers — viewport-virtualized (max 250) so hundreds
+            of reports never mount hundreds of DOM markers at once */}
         {mapInstance &&
-          filteredReports.map((report, index) => {
+          visibleReports.map((report, index) => {
             const thumbUrl = getReportThumb(report, photoThumbs);
             // Skeleton shimmer while a fetchable thumbnail is still outstanding.
             const thumbPending =
@@ -933,8 +1101,11 @@ export default function Map() {
             }
           }}
           aria-pressed={isPlacementMode}
+          aria-label={isPlacementMode ? 'Cancelar modo de marcação' : 'Reportar problema no mapa'}
+          aria-describedby={!jwt && !isPlacementMode ? 'report-fab-auth-hint' : undefined}
+          title={!jwt && !isPlacementMode ? 'Entre com sua conta Google para publicar' : undefined}
           className={cn(
-            'absolute bottom-16 right-3 z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-all duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
+            'absolute bottom-[calc(4rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
             selectedReport &&
             'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
             isPlacementMode
@@ -954,9 +1125,32 @@ export default function Map() {
             </>
           )}
         </Button>
+        {!jwt && !isPlacementMode && (
+          <span id="report-fab-auth-hint" className="sr-only">
+            Para publicar um reporte, entre com sua conta Google.
+          </span>
+        )}
 
-        {/* Google Maps-style floating details: only reveals after images preload */}
+        {/* Google Maps-style floating details: skeleton mirrors the panel
+            layout while images preload (no CLS on reveal) */}
         <AnimatePresence>
+          {selectedReport && !isDetailsReady && (
+            <div
+              key={`skeleton-${selectedReport.id}`}
+              role="status"
+              aria-label="Carregando detalhes da ocorrência"
+              aria-busy="true"
+              className="absolute z-10 inset-x-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-h-[62dvh] md:inset-x-auto md:left-3 md:top-[76px] md:bottom-16 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            >
+              <div aria-hidden="true" className="h-52 w-full shrink-0 animate-pulse bg-muted md:h-56" />
+              <div aria-hidden="true" className="flex flex-col gap-2.5 px-4 py-4 md:px-5">
+                <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-full animate-pulse rounded bg-muted" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+              </div>
+            </div>
+          )}
           {selectedReport && isDetailsReady && (
             <ReportDetailsPanel
               key={selectedReport.id}
@@ -964,6 +1158,14 @@ export default function Map() {
               images={gatedImages}
               onClose={() => setSelectedReport(null)}
               onUpvote={handleUpvote}
+              onPrev={
+                filteredReports.length > 1 ? () => handleSelectAdjacent(-1) : undefined
+              }
+              onNext={
+                filteredReports.length > 1 ? () => handleSelectAdjacent(1) : undefined
+              }
+              position={selectedIndex >= 0 ? selectedIndex + 1 : undefined}
+              total={filteredReports.length > 1 ? filteredReports.length : undefined}
             />
           )}
         </AnimatePresence>
@@ -976,6 +1178,7 @@ export default function Map() {
         coordinates={placementCoordinates}
         onSubmit={handleAddReport}
         onCancelPlacement={handleCancelPlacement}
+        isAuthenticated={!!jwt}
       />
     </div>
   );

@@ -53,7 +53,7 @@ const STATUS_CONFIG: Record<
 };
 
 const PANEL_POSITION =
-  'absolute z-10 inset-x-3 bottom-14 max-h-[62dvh] md:inset-x-auto md:left-3 md:top-[76px] md:bottom-16 md:w-[400px] md:max-h-none';
+  'absolute z-10 inset-x-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-h-[62dvh] md:inset-x-auto md:left-3 md:top-[76px] md:bottom-16 md:w-[400px] md:max-h-none';
 
 function PanelShell({
   children,
@@ -88,6 +88,10 @@ interface ReportDetailsPanelProps {
   images: string[];
   onClose: () => void;
   onUpvote: (reportId: string) => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+  position?: number;
+  total?: number;
 }
 
 /** Seção do autor com dados públicos (`GET /v1/auth/usuario`). */
@@ -175,7 +179,7 @@ function ReportAuthor({ report }: { report: StreetReport }) {
   );
 }
 
-export function ReportDetailsPanel({ report, images, onClose, onUpvote }: ReportDetailsPanelProps) {
+export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, onNext, position, total }: ReportDetailsPanelProps) {
   const [hasUpvoted, setHasUpvoted] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = React.useState(0);
@@ -185,7 +189,11 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
   // State resets via parent `key={report.id}` remount — no reset effect needed.
 
   React.useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      previouslyFocused?.focus?.({ preventScroll: true });
+    };
   }, [report.id]);
 
   React.useEffect(() => {
@@ -245,6 +253,13 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
   };
 
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${report.coordinates[1]},${report.coordinates[0]}`;
+  const coordFormat = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 5,
+    maximumFractionDigits: 5,
+  });
+  const formattedCoords = `${coordFormat.format(report.coordinates[1])}, ${coordFormat.format(report.coordinates[0])}`;
+  const upvoteFormat = new Intl.NumberFormat('pt-BR');
+  const showAdjacentNav = (onPrev ?? onNext) != null;
 
   return (
     <PanelShell label={`Detalhes da ocorrência ${report.title}`}>
@@ -256,7 +271,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
         size="icon-sm"
         onClick={onClose}
         aria-label="Fechar detalhes da ocorrência"
-        className="absolute top-3 right-3 z-20 size-8 rounded-full bg-black/50 text-white backdrop-blur-md hover:bg-black/70 hover:text-white"
+        className="absolute top-3 right-3 z-20 size-11 rounded-full bg-black/50 text-white backdrop-blur-md hover:bg-black/70 hover:text-white"
       >
         <X className="size-4" />
       </Button>
@@ -291,7 +306,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
                 type="button"
                 onClick={prevPhoto}
                 aria-label="Foto anterior"
-                className="absolute left-2 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/75"
+                className="absolute left-2 top-1/2 flex size-11 -translate-y-1/2 cursor-pointer touch-manipulation items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 <ChevronLeft className="size-4" />
               </button>
@@ -299,22 +314,28 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
                 type="button"
                 onClick={nextPhoto}
                 aria-label="Próxima foto"
-                className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/75"
+                className="absolute right-2 top-1/2 flex size-11 -translate-y-1/2 cursor-pointer touch-manipulation items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 <ChevronRight className="size-4" />
               </button>
-              <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1.5 px-4">
+              <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1 px-4">
                 {images.map((_, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => setActivePhotoIndex(idx)}
                     aria-label={`Ver foto ${idx + 1}`}
-                    className={cn(
-                      'h-1.5 cursor-pointer rounded-full transition-all',
-                      activePhotoIndex === idx ? 'w-5 bg-white' : 'w-2 bg-white/40 hover:bg-white/70'
-                    )}
-                  />
+                    aria-current={activePhotoIndex === idx}
+                    className="flex h-11 w-7 cursor-pointer touch-manipulation items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-full"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'h-1.5 rounded-full transition-[width,background-color] duration-200',
+                        activePhotoIndex === idx ? 'w-5 bg-white' : 'w-2 bg-white/40'
+                      )}
+                    />
+                  </button>
                 ))}
               </div>
             </>
@@ -342,7 +363,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
             <span className={cn('rounded-md p-1', categoryInfo.bgLight, categoryInfo.color)}>
               <CategoryIcon category={report.category} className="size-3.5" />
             </span>
-            <span className="truncate text-xs font-semibold text-foreground">{categoryInfo.label}</span>
+            <span className="truncate text-xs font-semibold text-foreground" title={categoryInfo.label}>{categoryInfo.label}</span>
           </div>
           <Badge variant="outline" className={cn('shrink-0 gap-1 text-[11px] font-medium', statusInfo.bg, statusInfo.color)}>
             <StatusIcon className="size-3" />
@@ -370,9 +391,9 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
             <ThumbsUp className={cn('size-3.5', hasUpvoted && 'fill-current')} />
             {hasUpvoted ? 'Apoiado' : 'Apoiar'}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleShare} className="h-9 gap-1.5 text-xs">
-            <Share2 className="size-3.5" />
-            {copied ? 'Copiado!' : 'Compar.'}
+          <Button type="button" variant="outline" size="sm" onClick={handleShare} aria-label="Compartilhar ocorrência" className="h-9 gap-1.5 truncate text-xs">
+            <Share2 className="size-3.5 shrink-0" />
+            {copied ? 'Copiado!' : 'Partilhar'}
           </Button>
           <a
             href={directionsUrl}
@@ -388,7 +409,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
         <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
           <ThumbsUp className="size-3.5" />
           <span>
-            <span className="font-mono font-semibold tabular-nums text-foreground">{report.upvotes}</span>{' '}
+            <span className="font-mono font-semibold tabular-nums text-foreground">{upvoteFormat.format(report.upvotes)}</span>{' '}
             apoios da comunidade
           </span>
         </div>
@@ -414,9 +435,10 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
               onClick={handleCopyCoords}
               className="mt-1.5 flex cursor-pointer items-center gap-1.5 font-mono text-[11px] tabular-nums text-muted-foreground transition-colors hover:text-foreground"
               title="Copiar coordenadas"
+              aria-label={`Copiar coordenadas ${formattedCoords}`}
             >
               <Copy className="size-3" />
-              {report.coordinates[1].toFixed(5)}, {report.coordinates[0].toFixed(5)}
+              {formattedCoords}
             </button>
           </div>
         </div>
@@ -429,6 +451,46 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote }: Report
           </p>
           <ReportAuthor report={report} />
         </div>
+
+        {showAdjacentNav && (
+          <>
+            <Separator className="my-3" />
+            <div className="flex items-center justify-between gap-2 pb-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onPrev}
+                disabled={!onPrev}
+                aria-label="Ocorrência anterior"
+                className="h-9 gap-1 text-xs"
+              >
+                <ChevronLeft className="size-3.5" />
+                Anterior
+              </Button>
+              {position != null && total != null && (
+                <span
+                  role="status"
+                  className="font-mono text-[11px] tabular-nums text-muted-foreground"
+                >
+                  {upvoteFormat.format(position)} de {upvoteFormat.format(total)}
+                </span>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onNext}
+                disabled={!onNext}
+                aria-label="Próxima ocorrência"
+                className="h-9 gap-1 text-xs"
+              >
+                Próxima
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </PanelShell>
   );

@@ -13,13 +13,13 @@ import {
   FieldGroup,
 } from "@/components/ui/shadcn/field"
 import { useAuth } from "@/lib/auth-context"
-
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? ""
+import { usePublicConfig } from "@/lib/public-config"
 
 function LoginFormInner({
+  googleClientId,
   className,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & { googleClientId: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { status, error, loginWithGoogle } = useAuth()
@@ -28,6 +28,7 @@ function LoginFormInner({
 
   const isBusy = pending || status === "loading"
   const displayError = localError ?? error
+  const hasClientId = googleClientId.length > 0
 
   const handleSuccess = async (credential: string | undefined) => {
     if (!credential) {
@@ -76,7 +77,7 @@ function LoginFormInner({
             </FieldDescription>
           </div>
           <Field>
-            {GOOGLE_CLIENT_ID ? (
+            {hasClientId ? (
               <div className="flex w-full justify-center">
                 <GoogleLogin
                   text="continue_with"
@@ -90,7 +91,7 @@ function LoginFormInner({
               </div>
             ) : (
               <p className="text-center text-sm text-destructive">
-                NEXT_PUBLIC_GOOGLE_CLIENT_ID não configurado.
+                GOOGLE_CLIENT_ID não configurado.
               </p>
             )}
             {isBusy && (
@@ -134,12 +135,22 @@ function LoginFormFallback(props: React.ComponentProps<"div">) {
 }
 
 export function LoginForm(props: React.ComponentProps<"div">) {
-  const form = GOOGLE_CLIENT_ID ? (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <LoginFormInner {...props} />
+  // Served by /api/public-config (see lib/public-config.ts) — null on first paint.
+  const publicConfig = usePublicConfig()
+  if (!publicConfig) {
+    return (
+      <React.Suspense fallback={null}>
+        <LoginFormFallback {...props} />
+      </React.Suspense>
+    )
+  }
+  const inner = <LoginFormInner googleClientId={publicConfig.googleClientId} {...props} />
+  const form = publicConfig.googleClientId ? (
+    <GoogleOAuthProvider clientId={publicConfig.googleClientId}>
+      {inner}
     </GoogleOAuthProvider>
   ) : (
-    <LoginFormInner {...props} />
+    inner
   )
   return (
     <React.Suspense fallback={<LoginFormFallback {...props} />}>

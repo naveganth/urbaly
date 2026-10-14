@@ -2,6 +2,7 @@
 
 import http from 'http';
 import https from 'https';
+import { getServerEnv } from '@/lib/env';
 
 interface ApiResponse {
   status: number;
@@ -9,10 +10,7 @@ interface ApiResponse {
   data: unknown;
 }
 
-const PRIMARY_API_BASE_URL =
-  process.env.API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:8080/v1/db';
+const PRIMARY_API_BASE_URL = getServerEnv().apiBaseUrl;
 const FALLBACK_API_BASE_URL = 'https://urbaly.gabrielataide.com/v1/db';
 const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
 

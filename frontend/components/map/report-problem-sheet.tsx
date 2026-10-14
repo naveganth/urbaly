@@ -44,7 +44,11 @@ interface ReportProblemSheetProps {
     report: Omit<StreetReport, 'id' | 'createdAt' | 'upvotes' | 'status'>,
   ) => void | Promise<void>;
   onCancelPlacement?: () => void;
+  /** False when the user is logged out — submit requires a Google JWT. */
+  isAuthenticated?: boolean;
 }
+
+const photoPlural = new Intl.PluralRules('pt-BR');
 
 export function ReportProblemSheet({
   isOpen,
@@ -52,6 +56,7 @@ export function ReportProblemSheet({
   coordinates,
   onSubmit,
   onCancelPlacement,
+  isAuthenticated = true,
 }: ReportProblemSheetProps) {
   const [category, setCategory] = React.useState<ReportCategory | null>(null);
   const [title, setTitle] = React.useState('');
@@ -291,8 +296,16 @@ export function ReportProblemSheet({
 
           {/* Form Content Body with Responsive Padding */}
           <div className='mx-auto flex w-full max-w-2xl flex-1 flex-col gap-7 px-5 py-6 pb-36 sm:px-6 sm:py-5 lg:px-8'>
+            {!isAuthenticated && (
+              <div className='flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-900 dark:text-amber-100'>
+                <CircleAlert className='size-4 shrink-0 mt-px' aria-hidden='true' />
+                <span>
+                  Você está sem entrar. Entre com sua conta Google para publicar — seus dados e fotos ficam no formulário.
+                </span>
+              </div>
+            )}
             {errorMessage && (
-              <div aria-live='polite' className='flex items-center gap-2.5 border-l-2 border-destructive bg-destructive/10 p-3.5 text-xs text-destructive'>
+              <div role='alert' aria-live='polite' id='report-form-error' className='flex items-center gap-2.5 border-l-2 border-destructive bg-destructive/10 p-3.5 text-xs text-destructive'>
                 <CircleAlert className='size-4 shrink-0' aria-hidden='true' />
                 <span className='font-medium'>{errorMessage}</span>
               </div>
@@ -302,10 +315,10 @@ export function ReportProblemSheet({
             <div className='order-0 flex flex-col gap-3 pb-7'>
               <div className='flex items-center justify-between'>
                 <div className='flex items-center gap-2'>
-                  <Camera className='size-4 text-primary' />
+                  <Camera aria-hidden='true' className='size-4 text-primary' />
                   <Label className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'>
-                    Fotos da ocorrência ({images.length}{' '}
-                    {images.length === 1 ? 'foto' : 'fotos'})
+                    Fotos da ocorrência <span aria-hidden='true' className='text-destructive'>*</span> ({images.length}{' '}
+                    {photoPlural.select(images.length) === 'one' ? 'foto' : 'fotos'})
                   </Label>
                 </div>
                 {images.length > 0 && (
@@ -367,7 +380,7 @@ export function ReportProblemSheet({
                 >
                   <span className='font-semibold'>
                     {rejectedPhotos.length}{' '}
-                    {rejectedPhotos.length === 1 ? 'foto recusada' : 'fotos recusadas'}:
+                    {photoPlural.select(rejectedPhotos.length) === 'one' ? 'foto recusada' : 'fotos recusadas'}:
                   </span>
                   {rejectedPhotos.map((rejected, index) => (
                     <span key={`${rejected.name}-${index}`} className='leading-relaxed'>
@@ -404,14 +417,14 @@ export function ReportProblemSheet({
                           draggable={false}
                           className='w-full h-full select-none object-cover'
                         />
-                        <div className='absolute inset-0 flex items-center justify-center bg-black/40 opacity-100 transition-opacity duration-150 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 motion-reduce:transition-none'>
+                        <div className='absolute inset-0 flex items-center justify-center bg-black/40 opacity-100 transition-opacity duration-150 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-visible:opacity-100 motion-reduce:transition-none'>
                           <button
                             type='button'
                             onClick={() => handleRemoveImage(index)}
-                            className='flex size-11 touch-manipulation items-center justify-center bg-destructive text-destructive-foreground focus-visible:ring-2 focus-visible:ring-destructive sm:size-7'
-                            title='Remover foto'
+                            aria-label={`Remover foto ${index + 1}`}
+                            className='flex size-11 touch-manipulation items-center justify-center rounded-full bg-destructive text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:size-11'
                           >
-                            <X className='size-4' />
+                            <X aria-hidden='true' className='size-4' />
                           </button>
                         </div>
                         <span className='absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-mono tabular-nums text-white backdrop-blur-xs'>
@@ -432,7 +445,7 @@ export function ReportProblemSheet({
                   htmlFor='report-title'
                   className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
                 >
-                  Título do problema
+                  Título do problema <span aria-hidden='true' className='text-destructive'>*</span>
                 </Label>
                 <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
                   {title.length}/70
@@ -444,8 +457,11 @@ export function ReportProblemSheet({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder='Ex: Buraco profundo na pista esquerda em frente ao comércio'
-                className='mt-1.5 h-11 text-base sm:h-8 sm:text-xs'
+                className='mt-1.5 h-11 text-base sm:h-11 sm:text-sm'
                 required
+                aria-required='true'
+                aria-invalid={errorMessage && !title.trim() ? true : undefined}
+                aria-describedby={errorMessage ? 'report-form-error' : undefined}
               />
             </div>
 
@@ -453,7 +469,7 @@ export function ReportProblemSheet({
             <div className='order-3 flex flex-col gap-2.5 pb-7'>
                 <div className='flex items-center justify-between'>
                   <Label className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'>
-                    Tipo de problema
+                    Tipo de problema <span aria-hidden='true' className='text-destructive'>*</span>
                   </Label>
                   <span className='text-xs leading-relaxed text-muted-foreground'>
                     Escolha uma categoria
@@ -519,7 +535,7 @@ export function ReportProblemSheet({
                     htmlFor='report-description'
                     className='text-xs font-semibold leading-tight tracking-[0.02em] text-foreground'
                   >
-                    Descreva o problema
+                    Descreva o problema <span aria-hidden='true' className='text-destructive'>*</span>
                   </Label>
                   <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
                     {description.length}/400
@@ -532,8 +548,11 @@ export function ReportProblemSheet({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder='Explique o que aconteceu, onde afeta a via e há quanto tempo o problema existe.'
-                  className='mt-1.5 min-h-28 resize-y rounded-none border-border bg-background text-base leading-relaxed sm:text-xs'
+                  className='mt-1.5 min-h-28 resize-y rounded-none border-border bg-background text-base leading-relaxed sm:text-sm'
                   required
+                  aria-required='true'
+                  aria-invalid={errorMessage && !description.trim() ? true : undefined}
+                  aria-describedby={errorMessage ? 'report-form-error' : undefined}
                 />
               </div>
 

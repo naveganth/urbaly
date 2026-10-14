@@ -99,17 +99,21 @@
 
 .animate-google-pin {
   animation: map-pin-drop 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: transform, opacity;
 }
 
 .animate-google-shadow {
   animation: map-pin-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: transform, opacity;
 }
 
-/* Single smooth hover lift for teardrop pins (one transform owner). */
-.google-pin-container:hover .animate-google-pin,
-.google-pin-container:hover .group,
+/* Single smooth hover lift for teardrop pins (one transform owner).
+   Hover gated to fine pointers; focus-visible always lifts for keyboard. */
+@media (hover: hover) and (pointer: fine) {
+  .google-pin-container:hover .animate-google-pin,
+  .google-pin-container:hover .group {
+    transform: translateY(-2px) scale(1.08);
+  }
+}
+
 .google-pin-container:focus-visible .animate-google-pin {
   transform: translateY(-2px) scale(1.08);
 }
@@ -144,19 +148,19 @@
 
 .animate-photo-pin {
   animation: photo-pin-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: transform, opacity;
 }
 
 /* Keep MapLibre zoom/locate controls clear of the floating search card.
    Desktop card hugs the left; on mobile the full-width card + chips stack
-   needs the controls pushed down. */
+   needs the controls pushed down. Safe-area keeps them off the notch. */
 .maplibregl-ctrl-top-right {
-  margin-top: 4px;
+  margin-top: calc(4px + env(safe-area-inset-top));
+  margin-right: calc(4px + env(safe-area-inset-right));
 }
 
 @media (max-width: 767px) {
   .maplibregl-ctrl-top-right {
-    margin-top: 122px;
+    margin-top: calc(122px + env(safe-area-inset-top));
   }
 }
 
@@ -186,6 +190,16 @@
   align-items: flex-end;
   justify-content: center;
   transform-origin: 50% 100%;
+}
+
+/* Promote layers only while interacting or crossfading — never permanently
+   on hundreds of pins. */
+.adaptive-marker:hover .marker-pin-layer,
+.adaptive-marker:hover .marker-photo-layer,
+.adaptive-marker:focus-visible .marker-pin-layer,
+.adaptive-marker:focus-visible .marker-photo-layer,
+.adaptive-marker.is-photo .marker-pin-layer,
+.adaptive-marker.is-photo .marker-photo-layer {
   will-change: transform, opacity;
 }
 
@@ -294,6 +308,19 @@ img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-shimmer,
 .adaptive-marker:hover,
 .adaptive-marker:focus-visible {
   z-index: 50;
+}
+
+/* Visible keyboard focus for map pins (a11y floor — z-index alone is not enough). */
+.adaptive-marker:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.google-pin-container:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .report-photo-container:hover,
