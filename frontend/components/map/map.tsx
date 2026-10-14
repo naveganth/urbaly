@@ -20,6 +20,7 @@ import {
   StreetReport,
   ReportCategory,
   CATEGORIES,
+  CATEGORY_ORDER,
   categoryFromApi,
   categoryToApi,
   REPORT_IMAGE_CDN,
@@ -205,6 +206,18 @@ export default function Map() {
 
   const hasActiveFilters =
     selectedCategory !== 'all' || searchQuery.trim().length > 0;
+
+  // Per-category occurrence counts for the filter rows.
+  const categoryCounts = React.useMemo(() => {
+    const counts = Object.fromEntries(CATEGORY_ORDER.map((cat) => [cat, 0])) as Record<
+      ReportCategory,
+      number
+    >;
+    for (const report of reports) {
+      counts[report.category] = (counts[report.category] ?? 0) + 1;
+    }
+    return counts;
+  }, [reports]);
 
   // True while any visible photo pin is still waiting on its CDN thumbnail —
   // drives the skeleton shimmer on markers and the legend loading hint.
@@ -752,6 +765,7 @@ export default function Map() {
             onSearchChange={setSearchQuery}
             selectedCategory={selectedCategory}
             onCategoryChange={setSelectedCategory}
+            categoryCounts={categoryCounts}
             isLoading={isDetailsLoading}
           />
         </div>

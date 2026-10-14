@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { Check, LayoutGrid, Loader2, Search, SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/shadcn/input';
@@ -23,6 +22,8 @@ interface SearchFiltersProps {
   onSearchChange: (value: string) => void;
   selectedCategory: CategoryFilter;
   onCategoryChange: (category: CategoryFilter) => void;
+  /** Occurrence count per category — shown on the right of each row. */
+  categoryCounts?: Record<ReportCategory, number>;
   /** Shows the spinner inside the search field (e.g. details panel preloading). */
   isLoading?: boolean;
   className?: string;
@@ -40,6 +41,7 @@ export function SearchFilters({
   onSearchChange,
   selectedCategory,
   onCategoryChange,
+  categoryCounts,
   isLoading = false,
   className,
 }: SearchFiltersProps) {
@@ -86,48 +88,24 @@ export function SearchFilters({
         ) : null}
       </div>
 
-      {/* Category filter */}
+      {/* Unified category filter button */}
+      <span aria-hidden className="h-6 w-px shrink-0 bg-border/70" />
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={
-            hasActiveCategory ? `Filtro: ${activeInfo?.label}. Abrir categorias` : 'Filtrar por categoria'
+            hasActiveCategory && activeInfo
+              ? `Filtro ativo: ${activeInfo.label}`
+              : 'Filtrar por categoria'
           }
           className={cn(
-            'relative flex size-10 shrink-0 cursor-pointer touch-manipulation items-center justify-center overflow-hidden rounded-full outline-none transition-colors duration-200 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
-            hasActiveCategory ? 'bg-primary/10 text-foreground' : 'text-muted-foreground'
+            'relative inline-flex h-10 shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium outline-none transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
+            hasActiveCategory
+              ? 'bg-primary/10 text-foreground ring-1 ring-primary/30'
+              : 'text-muted-foreground'
           )}
         >
-          <AnimatePresence mode="wait" initial={false}>
-            {hasActiveCategory && activeInfo ? (
-              <motion.span
-                key={selectedCategory}
-                initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.7 }}
-                transition={{ duration: 0.15, ease: 'easeOut' }}
-                className={cn('rounded-md p-1', activeInfo.bgLight, activeInfo.color)}
-              >
-                <CategoryIcon category={selectedCategory as ReportCategory} className="size-4" />
-              </motion.span>
-            ) : (
-              <motion.span
-                key="all"
-                initial={{ opacity: 0, scale: 0.7 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.7 }}
-                transition={{ duration: 0.15, ease: 'easeOut' }}
-                className="flex items-center justify-center"
-              >
-                <SlidersHorizontal className="size-4" />
-              </motion.span>
-            )}
-          </AnimatePresence>
-          {hasActiveCategory ? (
-            <span
-              aria-hidden
-              className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-background"
-            />
-          ) : null}
+          <SlidersHorizontal className="size-4 shrink-0" />
+          <span className="hidden sm:inline">Filtrar</span>
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
@@ -153,6 +131,11 @@ export function SearchFilters({
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]">
               Todas
             </span>
+            {categoryCounts ? (
+              <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                {Object.values(categoryCounts).reduce((sum, n) => sum + n, 0)}
+              </span>
+            ) : null}
             {!hasActiveCategory ? <Check className="size-4 shrink-0 text-primary" /> : null}
           </DropdownMenuItem>
 
@@ -180,6 +163,11 @@ export function SearchFilters({
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.01em]">
                   {info.label}
                 </span>
+                {categoryCounts ? (
+                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                    {categoryCounts[catKey] ?? 0}
+                  </span>
+                ) : null}
                 {isSelected ? <Check className="size-4 shrink-0 text-primary" /> : null}
               </DropdownMenuItem>
             );
