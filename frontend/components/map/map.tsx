@@ -5,25 +5,13 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTheme } from '@/components/theme-provider';
 import {
-  Search,
   X,
   CircleAlert,
   Crosshair,
-  SlidersHorizontal,
   Info,
-  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import { Input } from '@/components/ui/shadcn/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from '@/components/ui/shadcn/dropdown-menu';
 import { createMapReport, getMapReports, getReportImages } from '@/app/actions/api';
 import { useAuth } from '@/lib/auth-context';
 import { AnimatePresence } from 'motion/react';
@@ -31,13 +19,12 @@ import { INITIAL_REPORTS } from '@/data/mock-reports';
 import {
   StreetReport,
   ReportCategory,
-  ReportStatus,
   CATEGORIES,
-  CATEGORY_ORDER,
   categoryFromApi,
   categoryToApi,
   REPORT_IMAGE_CDN,
 } from './types';
+import { SearchFilters } from './search-filters';
 import { ReportProblemSheet } from './report-problem-sheet';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
@@ -45,7 +32,6 @@ import {
   peekCachedReportImages,
   storeCachedReportImages,
 } from './use-report-images';
-import { CategoryIcon } from './category-icon';
 import { MapMarker } from './map-marker';
 import { createPlacementMarkerElement } from './placement-pin';
 import { fetchGoogleLikeStyle, getCartoBaseStyleUrl } from './google-maps-style';
@@ -197,16 +183,14 @@ export default function Map() {
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
 
-  // Search and filter state
+  // Search and filter state (Google Maps-style pills)
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<ReportCategory | 'all'>('all');
-  const [selectedStatus, setSelectedStatus] = React.useState<ReportStatus | 'all'>('all');
 
   // Filter reports reactively
   const filteredReports = React.useMemo(() => {
     return reports.filter((report) => {
       const matchesCategory = selectedCategory === 'all' || report.category === selectedCategory;
-      const matchesStatus = selectedStatus === 'all' || report.status === selectedStatus;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -215,21 +199,12 @@ export default function Map() {
         report.address.toLowerCase().includes(q) ||
         (report.neighborhood && report.neighborhood.toLowerCase().includes(q));
 
-      return matchesCategory && matchesStatus && matchesSearch;
+      return matchesCategory && matchesSearch;
     });
-  }, [reports, selectedCategory, selectedStatus, searchQuery]);
-
-  // Statistics calculation
-  const stats = React.useMemo(() => {
-    const total = reports.length;
-    const open = reports.filter((r) => r.status === 'open').length;
-    const investigating = reports.filter((r) => r.status === 'investigating').length;
-    const resolved = reports.filter((r) => r.status === 'resolved').length;
-    return { total, open, investigating, resolved };
-  }, [reports]);
+  }, [reports, selectedCategory, searchQuery]);
 
   const hasActiveFilters =
-    selectedCategory !== 'all' || selectedStatus !== 'all' || searchQuery.trim().length > 0;
+    selectedCategory !== 'all' || searchQuery.trim().length > 0;
 
   // True while any visible photo pin is still waiting on its CDN thumbnail —
   // drives the skeleton shimmer on markers and the legend loading hint.
@@ -770,149 +745,15 @@ export default function Map() {
           isPlacementMode && 'placement-mode-active'
         )}
       >
-        {/* Floating search card */}
-        <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-3 md:top-3 md:w-[392px]">
-          <div
-            role="search"
-            className="flex items-center gap-1.5 rounded-2xl border border-border/70 bg-background/95 py-1.5 pl-1.5 pr-2 shadow-xl backdrop-blur-md dark:bg-zinc-900/95"
-          >
-            <div className="relative min-w-0 flex-1">
-              {isDetailsLoading ? (
-                <Loader2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-primary" />
-              ) : (
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              )}
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={isDetailsLoading ? 'Carregando ocorrência…' : 'Buscar por rua, bairro ou problema...'}
-                aria-busy={isDetailsLoading}
-                aria-label="Buscar ocorrências"
-                className="h-11 rounded-xl border-0 bg-transparent pl-9 text-sm shadow-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-primary/30"
-              />
-              {isDetailsLoading ? (
-                <span role="status" aria-live="polite" className="sr-only">
-                  Carregando ocorrência
-                </span>
-              ) : (
-                searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label="Limpar busca"
-                  >
-                    <X className="size-4" />
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Status Dropdown Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger className="hidden h-11 w-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:inline-flex" aria-label="Filtrar por status">
-                <span className="relative flex items-center justify-center">
-                  <SlidersHorizontal className="size-4" />
-                  {selectedStatus !== 'all' && (
-                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />
-                  )}
-                </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="text-xs">
-                <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>
-                  Todos os status
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('open')}>
-                  Em Aberto
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>
-                  Em Análise
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>
-                  Resolvidos
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Mobile filters (status + categories) */}
-            <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-11 w-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:hidden" aria-label="Abrir filtros">
-                <span className="relative flex items-center justify-center">
-                  <SlidersHorizontal className="size-4" />
-                  {(selectedStatus !== 'all' || selectedCategory !== 'all') && (
-                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />
-                  )}
-                </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="max-h-[min(28rem,70vh)] w-64 overflow-y-auto text-xs">
-                <DropdownMenuLabel>Filtrar por status</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSelectedStatus('all')}>Todos os status</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('open')}>Em aberto</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('investigating')}>Em análise</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedStatus('resolved')}>Resolvidos</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Filtrar por categoria</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setSelectedCategory('all')}>
-                  Todas as categorias ({reports.length})
-                </DropdownMenuItem>
-                {CATEGORY_ORDER.map((catKey) => (
-                  <DropdownMenuItem key={catKey} onClick={() => setSelectedCategory(catKey)}>
-                    <CategoryIcon category={catKey} className="size-3.5" />
-                    {CATEGORIES[catKey].label} ({reports.filter((r) => r.category === catKey).length})
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Category chips — scrollable row under the card, hidden while a report is open */}
-          <div
-            className={cn(
-              'mt-2 items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none',
-              selectedReport ? 'hidden' : 'flex'
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('all')}
-              className={cn(
-                'shrink-0 cursor-pointer touch-manipulation whitespace-nowrap rounded-full border px-3 py-2 text-xs font-medium shadow-md backdrop-blur-md transition-[background-color,border-color,color] duration-150',
-                selectedCategory === 'all'
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border/70 bg-background/95 text-muted-foreground hover:bg-muted dark:bg-zinc-900/95'
-              )}
-            >
-              Todas ({reports.length})
-            </button>
-
-            {CATEGORY_ORDER.map((catKey) => {
-              const cat = CATEGORIES[catKey];
-              const count = reports.filter((r) => r.category === catKey).length;
-              const isSelected = selectedCategory === catKey;
-
-              return (
-                <button
-                  key={catKey}
-                  type="button"
-                  onClick={() => setSelectedCategory(isSelected ? 'all' : catKey)}
-                  aria-pressed={isSelected}
-                  className={cn(
-                    'flex shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-xs font-medium shadow-md backdrop-blur-md transition-[background-color,border-color,color] duration-150',
-                    isSelected
-                      ? 'border-foreground bg-foreground text-background'
-                      : 'border-border/70 bg-background/95 text-muted-foreground hover:bg-muted dark:bg-zinc-900/95'
-                  )}
-                >
-                  <CategoryIcon category={catKey} className="size-3.5" />
-                  <span>{cat.label}</span>
-                  <span className="font-mono text-[10px] tabular-nums opacity-75">({count})</span>
-                </button>
-              );
-            })}
-          </div>
+        {/* Floating search + unified category filter (Google Maps-style, single item) */}
+        <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-3 md:top-3 md:w-[420px]">
+          <SearchFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            isLoading={isDetailsLoading}
+          />
         </div>
 
         {isMapLoading && !mapError && (
@@ -964,24 +805,11 @@ export default function Map() {
           </div>
         )}
 
-        {/* Bottom Legend / Stats Widget */}
+        {/* Bottom Legend — count + photo-mode hint (no status breakdown) */}
         <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/80 bg-background/90 px-3.5 py-2 text-[11px] shadow-lg backdrop-blur-md sm:right-auto sm:flex-nowrap sm:py-1.5 dark:bg-zinc-900/90">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <span className="font-mono font-semibold tabular-nums text-foreground">{filteredReports.length}</span>
             <span className="leading-tight">no mapa</span>
-          </div>
-          <span className="h-3 w-px bg-border" />
-          <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-            <span className="size-2 rounded-full bg-amber-500" />
-            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.open}</span> abertos</span>
-          </div>
-          <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
-            <span className="size-2 rounded-full bg-sky-500" />
-            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.investigating}</span> em análise</span>
-          </div>
-          <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            <span className="leading-tight"><span className="font-mono tabular-nums">{stats.resolved}</span> resolvidos</span>
           </div>
           <span className="h-3 w-px bg-border" />
           <div
@@ -1027,7 +855,6 @@ export default function Map() {
                     if (hasActiveFilters) {
                       setSearchQuery('');
                       setSelectedCategory('all');
-                      setSelectedStatus('all');
                     } else {
                       setIsPlacementMode(true);
                     }

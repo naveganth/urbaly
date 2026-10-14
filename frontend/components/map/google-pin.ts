@@ -1,6 +1,7 @@
 import { ReportCategory } from './types';
 
-// Category color palettes matching Google Maps vibrant palette & Urbaly dark mode
+// Category colors aligned with the filter theme in types.ts (same hue
+// families for pins, dropdown tiles and photo rings).
 export const CATEGORY_PIN_COLORS: Record<
   ReportCategory,
   { primary: string; darkPrimary: string; label: string }
@@ -8,9 +9,9 @@ export const CATEGORY_PIN_COLORS: Record<
   pothole: { primary: '#f59e0b', darkPrimary: '#fbbf24', label: 'Buraco / Asfalto' },
   lighting: { primary: '#eab308', darkPrimary: '#facc15', label: 'Iluminação Pública' },
   waste: { primary: '#10b981', darkPrimary: '#34d399', label: 'Lixo e Entulho' },
-  drainage: { primary: '#0284c7', darkPrimary: '#38bdf8', label: 'Alagamento / Drenagem' },
-  signage: { primary: '#ef4444', darkPrimary: '#f87171', label: 'Sinalização / Trânsito' },
-  accessibility: { primary: '#8b5cf6', darkPrimary: '#a78bfa', label: 'Calçada / Acessibilidade' },
+  drainage: { primary: '#0ea5e9', darkPrimary: '#38bdf8', label: 'Alagamento / Drenagem' },
+  signage: { primary: '#f43f5e', darkPrimary: '#fb7185', label: 'Sinalização / Trânsito' },
+  accessibility: { primary: '#a855f7', darkPrimary: '#c084fc', label: 'Calçada / Acessibilidade' },
   greenery: { primary: '#16a34a', darkPrimary: '#4ade80', label: 'Árvores / Praças' },
   vandalism: { primary: '#ea580c', darkPrimary: '#fb923c', label: 'Vandalismo / Patrimônio' },
   other: { primary: '#64748b', darkPrimary: '#94a3b8', label: 'Outro Problema' },

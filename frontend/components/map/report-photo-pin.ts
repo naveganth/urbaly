@@ -19,7 +19,7 @@ export interface ReportPhotoPinData {
 
 const STATUS_META: Record<ReportStatus, { label: string; dot: string }> = {
   open: { label: 'Em aberto', dot: '#f59e0b' },
-  investigating: { label: 'Em análise', dot: '#0284c7' },
+  investigating: { label: 'Em análise', dot: '#0ea5e9' },
   resolved: { label: 'Resolvido', dot: '#10b981' },
 };
 
