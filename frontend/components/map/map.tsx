@@ -25,7 +25,7 @@ import {
   categoryToApi,
   REPORT_IMAGE_CDN,
 } from './types';
-import { MapAccountButton, MapCategoryPills, MapFilterButton, MapIconRail, MapSearchCard } from './map-shell';
+import { MapAccountButton, MapFilterButton, MapIconRail, MapSearchCard } from './map-shell';
 import { ReportWizardSheet } from './report-wizard-card';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
@@ -161,6 +161,7 @@ export default function Map() {
   const isDetailsLoading = selectedReport !== null && !isDetailsReady;
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
+  const [geoHint, setGeoHint] = React.useState<string | null>(null);
   // Retry resets loading/error in the event handler (not in the effect body)
   // so the fetch effect above never calls setState synchronously.
   const handleRetryMap = React.useCallback(() => {
@@ -448,21 +449,40 @@ export default function Map() {
     }, 20000);
 
     map.addControl(
-      new maplibregl.AttributionControl({ compact: true }),
+      new maplibregl.AttributionControl({ compact: false }),
       'bottom-left'
     );
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-    map.addControl(
-      new maplibregl.GeolocateControl({
-        positionOptions: {
-          enableHighAccuracy: true,
-        },
-        trackUserLocation: false,
-        showUserLocation: true,
-        showAccuracyCircle: true,
-      }),
-      'bottom-right'
-    );
+    const geolocateControl = new maplibregl.GeolocateControl({
+      positionOptions: {
+        enableHighAccuracy: true,
+      },
+      trackUserLocation: false,
+      showUserLocation: true,
+      showAccuracyCircle: true,
+    });
+    // Fly to the user once located; explain failures inline (no alert()).
+    geolocateControl.on('geolocate', (position) => {
+      setGeoHint(null);
+      try {
+        const coords = (position as unknown as { coords?: { longitude?: unknown; latitude?: unknown } })?.coords;
+        if (typeof coords?.longitude !== 'number' || typeof coords?.latitude !== 'number') return;
+        const center: [number, number] = [coords.longitude, coords.latitude];
+        if (prefersReducedMotion()) {
+          map.jumpTo({ center, zoom: Math.max(map.getZoom(), 15) });
+        } else {
+          map.easeTo({ center, zoom: Math.max(map.getZoom(), 15), duration: 600 });
+        }
+      } catch {
+        // Framing the user location is a nicety; the dot still shows.
+      }
+    });
+    geolocateControl.on('error', () => {
+      setGeoHint(
+        'Não conseguimos sua localização. Permita o acesso à localização no navegador e tente de novo.'
+      );
+    });
+    map.addControl(geolocateControl, 'bottom-right');
 
     return () => {
       cancelled = true;
@@ -587,8 +607,8 @@ export default function Map() {
         center: selectedReport.coordinates,
         duration: 600,
         padding: isDesktop
-          ? { top: 150, bottom: 60, left: 448, right: 60 }
-          : { top: 130, bottom: 340, left: 20, right: 20 },
+          ? { top: 90, bottom: 60, left: 448, right: 60 }
+          : { top: 100, bottom: 340, left: 20, right: 20 },
       });
     } catch {
       // Padding-aware pan is a nicety; never break selection if it fails.
@@ -611,8 +631,8 @@ export default function Map() {
         center: placementCoordinates,
         duration: 600,
         padding: isDesktop
-          ? { top: 150, bottom: 60, left: 32, right: 460 }
-          : { top: 130, bottom: 400, left: 20, right: 20 },
+          ? { top: 90, bottom: 60, left: 32, right: 460 }
+          : { top: 100, bottom: 400, left: 20, right: 20 },
       });
     } catch {
       // Padding-aware pan is a nicety; never break placement if it fails.
@@ -770,7 +790,7 @@ export default function Map() {
             isPlacementMode && 'placement-mode-active'
           )}
         >
-          {/* Floating Maps chrome: search card + category pills */}
+          {/* Floating Maps chrome: search card only (filters live in the card) */}
           <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-4 md:top-4 md:w-[440px]">
             <MapSearchCard
               searchQuery={searchQuery}
@@ -799,13 +819,24 @@ export default function Map() {
             <MapAccountButton />
           </div>
 
-          <div className="absolute inset-x-3 top-[68px] z-20 md:left-4 md:right-4 md:top-[72px] md:inset-x-auto">
-            <MapCategoryPills
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              categoryCounts={categoryCounts}
-            />
-          </div>
+          {/* Location feedback — friendly, dismissible, never a native alert */}
+          {geoHint && (
+            <div
+              role="status"
+              className="absolute inset-x-3 top-[68px] z-20 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-border/70 bg-background/95 px-3 py-2.5 text-xs font-medium text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
+            >
+              <Crosshair aria-hidden="true" className="size-4 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1">{geoHint}</span>
+              <button
+                type="button"
+                onClick={() => setGeoHint(null)}
+                aria-label="Dispensar aviso de localização"
+                className="flex size-9 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
 
           {showMapLoader && !mapError && (
             <div
@@ -847,7 +878,7 @@ export default function Map() {
           {/* Placement Mode Top Overlay Banner — sits below pills.
               Hidden once the form card takes over (the point is already picked). */}
           {isPlacementMode && !isSheetOpen && (
-            <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center font-sans text-xs font-semibold text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[128px] dark:bg-zinc-900/95">
+            <div role="status" className="absolute left-3 right-3 top-[76px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center font-sans text-xs font-semibold text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[84px] dark:bg-zinc-900/95">
               <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
               <Crosshair aria-hidden="true" className="size-4 text-primary" />
               <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
@@ -865,7 +896,7 @@ export default function Map() {
           {/* Bottom Legend — count only; pins are stable across zoom */}
           <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 font-sans text-[11px] backdrop-blur-md md:left-4 dark:bg-zinc-900/90">
             <div className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="font-mono font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
+              <span className="font-sans font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
               <span className="leading-tight">no mapa</span>
             </div>
           </div>
@@ -992,7 +1023,7 @@ export default function Map() {
                 role="status"
                 aria-label="Carregando detalhes da ocorrência"
                 aria-busy="true"
-                className="absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[136px] md:bottom-6 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card md:rounded-2xl md:border-b"
+                className="absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[84px] md:bottom-6 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card md:rounded-2xl md:border-b"
               >
                 <div aria-hidden="true" className="h-52 w-full shrink-0 animate-pulse bg-muted md:h-56" />
                 <div aria-hidden="true" className="flex flex-col gap-2.5 px-4 py-4 md:px-5">

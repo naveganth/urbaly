@@ -55,7 +55,7 @@ export function WizardStepPhotos({
             Validação EXIF dos últimos {PHOTO_FRESHNESS_MINUTES} min
           </span>
         </span>
-        <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 font-mono text-[11px] tabular-nums">
+        <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 font-sans text-[11px] tabular-nums">
           {images.length}
         </span>
       </button>
@@ -108,7 +108,7 @@ export function WizardStepPhotos({
             <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
               <ImagePlus className="size-3.5 text-primary" aria-hidden="true" />
               Anexadas
-              <span className="font-mono font-normal tabular-nums text-muted-foreground">
+              <span className="font-sans font-normal tabular-nums text-muted-foreground">
                 {images.length}
               </span>
             </span>
@@ -138,7 +138,7 @@ export function WizardStepPhotos({
                   className="h-full w-full select-none object-cover"
                 />
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent px-2 pt-4 pb-1.5">
-                  <span className="font-mono text-[10px] font-semibold tabular-nums text-white">
+                  <span className="font-sans text-[10px] font-semibold tabular-nums text-white">
                     FOTO {index + 1}
                   </span>
                   <button
@@ -236,7 +236,7 @@ export function WizardStepDetails({
           <Label htmlFor="wizard-title" className="text-xs font-bold tracking-[0.04em] uppercase">
             Título <span aria-hidden="true" className="text-destructive">*</span>
           </Label>
-          <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 font-sans text-[11px] tabular-nums text-muted-foreground">
             {title.length}/70
           </span>
         </div>
@@ -257,7 +257,7 @@ export function WizardStepDetails({
           <Label htmlFor="wizard-description" className="text-xs font-bold tracking-[0.04em] uppercase">
             Descrição <span aria-hidden="true" className="text-destructive">*</span>
           </Label>
-          <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 font-sans text-[11px] tabular-nums text-muted-foreground">
             {description.length}/400
           </span>
         </div>
@@ -317,7 +317,7 @@ export function WizardStepReview({
               draggable={false}
               className="h-full w-full select-none object-cover"
             />
-            <span className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[11px] text-white backdrop-blur-md">
+            <span className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 font-sans text-[11px] text-white backdrop-blur-md">
               {images.length} {images.length === 1 ? 'foto' : 'fotos'}
             </span>
           </div>
@@ -354,7 +354,7 @@ export function WizardStepReview({
             <dt className="text-[10px] font-bold tracking-[0.06em] text-muted-foreground uppercase">
               Local
             </dt>
-            <dd className="mt-0.5 truncate font-mono text-[11px] tabular-nums text-muted-foreground">
+            <dd className="mt-0.5 truncate font-sans text-[11px] tabular-nums text-muted-foreground">
               {shortCoords}
             </dd>
           </div>

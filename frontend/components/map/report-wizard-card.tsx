@@ -378,10 +378,10 @@ export function ReportWizardSheet({
                   </h2>
                   <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[11px] text-muted-foreground">
                     <MapPin className="size-3 shrink-0 text-primary" aria-hidden="true" />
-                    <span className="truncate font-mono tabular-nums">{shortCoords}</span>
+                    <span className="truncate font-sans tabular-nums">{shortCoords}</span>
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 font-sans text-[11px] tabular-nums text-muted-foreground">
                   {step + 1}/3
                 </span>
                 <button

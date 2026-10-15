@@ -132,7 +132,7 @@ export function SearchFilters({
               Todas
             </span>
             {categoryCounts ? (
-              <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              <span className="font-sans text-[11px] tabular-nums text-muted-foreground">
                 {new Intl.NumberFormat('pt-BR').format(Object.values(categoryCounts).reduce((sum, n) => sum + n, 0))}
               </span>
             ) : null}
@@ -164,7 +164,7 @@ export function SearchFilters({
                   {info.label}
                 </span>
                 {categoryCounts ? (
-                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                  <span className="font-sans text-[11px] tabular-nums text-muted-foreground">
                     {new Intl.NumberFormat('pt-BR').format(categoryCounts[catKey] ?? 0)}
                   </span>
                 ) : null}

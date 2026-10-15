@@ -245,7 +245,7 @@ export function MapSearchCard({
           placeholder={isLoading ? 'Carregando…' : 'Buscar no mapa...'}
           aria-label="Buscar ocorrências"
           aria-busy={isLoading}
-          className="h-10 w-full rounded-full bg-transparent pr-8 font-sans text-sm tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
+          className="h-10 w-full rounded-full bg-transparent pl-3 pr-8 font-sans text-sm tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
         />
         {searchQuery ? (
           <button
@@ -262,73 +262,6 @@ export function MapSearchCard({
         ) : null}
       </div>
       {rightSlot}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Category pills — single scroll row, seamless across breakpoints    */
-/* ------------------------------------------------------------------ */
-
-export function MapCategoryPills({
-  selectedCategory,
-  onCategoryChange,
-  categoryCounts,
-  className,
-}: {
-  selectedCategory: ReportCategory | 'all';
-  onCategoryChange: (category: ReportCategory | 'all') => void;
-  categoryCounts?: Record<ReportCategory, number>;
-  className?: string;
-}) {
-  const total = categoryCounts
-    ? Object.values(categoryCounts).reduce((sum, n) => sum + n, 0)
-    : undefined;
-
-  const pills: Array<{ key: ReportCategory | 'all'; label: string; icon?: ReportCategory }> = [
-    { key: 'all', label: 'Todas' },
-    ...CATEGORY_ORDER.map((cat) => ({
-      key: cat as ReportCategory | 'all',
-      label: CATEGORIES[cat].label,
-      icon: cat as ReportCategory,
-    })),
-  ];
-
-  return (
-    <div
-      role="toolbar"
-      aria-label="Filtrar por categoria"
-      className={cn(
-        'scrollbar-none flex items-center gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5',
-        '[mask-image:linear-gradient(to_right,black_92%,transparent)]',
-        className
-      )}
-    >
-      {pills.map((pill) => {
-        const active = selectedCategory === pill.key;
-        return (
-          <button
-            key={pill.key}
-            type="button"
-            onClick={() => onCategoryChange(pill.key)}
-            aria-pressed={active}
-            className={cn(
-              'inline-flex h-9 shrink-0 cursor-pointer touch-manipulation snap-start items-center gap-1.5 whitespace-nowrap rounded-full border px-3 font-sans text-xs font-medium backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              active
-                ? 'border-primary/40 bg-primary text-primary-foreground'
-                : 'border-border/70 bg-background/95 text-foreground hover:bg-muted dark:bg-zinc-900/95'
-            )}
-          >
-            {pill.icon ? (
-              <CategoryIcon category={pill.icon} className="size-3.5 shrink-0" />
-            ) : null}
-            {pill.label}
-            {pill.key === 'all' && total != null ? (
-              <span className="font-mono text-[11px] tabular-nums opacity-70">{total}</span>
-            ) : null}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -423,7 +356,7 @@ export function MapFilterButton({
               Todas
             </span>
             {categoryCounts ? (
-              <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              <span className="font-sans text-[11px] tabular-nums text-muted-foreground">
                 {new Intl.NumberFormat('pt-BR').format(
                   Object.values(categoryCounts).reduce((sum, n) => sum + n, 0)
                 )}
@@ -457,7 +390,7 @@ export function MapFilterButton({
                   {info.label}
                 </span>
                 {categoryCounts ? (
-                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                  <span className="font-sans text-[11px] tabular-nums text-muted-foreground">
                     {new Intl.NumberFormat('pt-BR').format(categoryCounts[catKey] ?? 0)}
                   </span>
                 ) : null}

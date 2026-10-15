@@ -185,16 +185,47 @@
 
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button {
   width: 44px;
-  height: 44px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   touch-action: manipulation;
+}
+
+/* Locate is a lone button: keep it a 44px circle. */
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button:only-child {
+  height: 44px;
 }
 
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button + button {
   border-top: 1px solid var(--border);
 }
 
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button:hover {
+  background: var(--muted);
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+/* Center MapLibre's sprite glyphs inside our fixed-size buttons. */
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl-icon {
-  filter: none;
+  width: 18px;
+  height: 18px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.dark .maplibregl-ctrl-bottom-right .maplibregl-ctrl-icon {
+  filter: invert(1);
 }
 
 /* Compass adds noise next to the category UX — zoom in/out is enough. */

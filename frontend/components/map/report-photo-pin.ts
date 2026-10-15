@@ -106,7 +106,7 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
       </div>
       <span class="absolute -bottom-0.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-r border-b"
         style="background: ${ringColor}; border-color: rgba(0,0,0,0.15);"></span>
-      <span class="js-photo-count absolute -top-1 -right-1 items-center justify-center rounded-full border border-border bg-card px-1 font-mono text-[10px] font-semibold tabular-nums text-card-foreground shadow-md ${extraCount > 0 ? 'flex h-5 min-w-5' : 'hidden'}">+${extraCount}</span>
+      <span class="js-photo-count absolute -top-1 -right-1 items-center justify-center rounded-full border border-border bg-card px-1 font-sans text-[10px] font-semibold tabular-nums text-card-foreground shadow-md ${extraCount > 0 ? 'flex h-5 min-w-5' : 'hidden'}">+${extraCount}</span>
       <span class="absolute bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-zinc-950" style="background: ${ringColor};"></span>
     </div>
     <div class="pointer-events-none absolute bottom-[calc(100%_+_12px)] left-1/2 z-50 hidden w-60 -translate-x-1/2 translate-y-1 opacity-0 transition-[transform,opacity] duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 md:block"
@@ -132,7 +132,7 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
           <span class="inline-flex items-center gap-1.5 font-medium text-foreground">
             <span class="h-1.5 w-1.5 rounded-full" style="background: ${statusMeta.dot};"></span>${safeStatus}
           </span>
-          <span class="font-mono tabular-nums text-muted-foreground">▲ ${upvotes}</span>
+          <span class="font-sans tabular-nums text-muted-foreground">▲ ${upvotes}</span>
         </div>
       </div>
       <span class="mx-auto block h-2.5 w-2.5 -translate-y-[7px] rotate-45 border-r border-b border-border bg-card"></span>

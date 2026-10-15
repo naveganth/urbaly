@@ -53,7 +53,7 @@ const STATUS_CONFIG: Record<
 };
 
 const PANEL_POSITION =
-  'absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[136px] md:bottom-6 md:w-[400px] md:max-h-none';
+  'absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[84px] md:bottom-6 md:w-[400px] md:max-h-none';
 
 function PanelShell({
   children,
@@ -299,7 +299,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
 
           {images.length > 1 && (
-            <span className="absolute top-3 left-3 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[11px] text-white backdrop-blur-md">
+            <span className="absolute top-3 left-3 rounded-full bg-black/60 px-2 py-0.5 font-sans text-[11px] text-white backdrop-blur-md">
               {activePhotoIndex + 1} de {images.length}
             </span>
           )}
@@ -414,7 +414,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
         <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
           <ThumbsUp className="size-3.5" />
           <span>
-            <span className="font-mono font-semibold tabular-nums text-foreground">{upvoteFormat.format(report.upvotes)}</span>{' '}
+            <span className="font-sans font-semibold tabular-nums text-foreground">{upvoteFormat.format(report.upvotes)}</span>{' '}
             apoios da comunidade
           </span>
         </div>
@@ -438,7 +438,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
             <button
               type="button"
               onClick={handleCopyCoords}
-              className="mt-1.5 flex cursor-pointer items-center gap-1.5 font-mono text-[11px] tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+              className="mt-1.5 flex cursor-pointer items-center gap-1.5 font-sans text-[11px] tabular-nums text-muted-foreground transition-colors hover:text-foreground"
               title="Copiar coordenadas"
               aria-label={`Copiar coordenadas ${formattedCoords}`}
             >
@@ -476,7 +476,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
               {position != null && total != null && (
                 <span
                   role="status"
-                  className="font-mono text-[11px] tabular-nums text-muted-foreground"
+                  className="font-sans text-[11px] tabular-nums text-muted-foreground"
                 >
                   {upvoteFormat.format(position)} de {upvoteFormat.format(total)}
                 </span>

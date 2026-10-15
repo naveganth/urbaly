@@ -346,7 +346,7 @@ export function ReportProblemSheet({
                   </h2>
                   <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[11px] text-muted-foreground">
                     <MapPin className="size-3 shrink-0 text-primary" aria-hidden="true" />
-                    <span className="truncate font-mono tabular-nums">{shortCoords}</span>
+                    <span className="truncate font-sans tabular-nums">{shortCoords}</span>
                   </p>
                 </div>
                 <button
@@ -386,7 +386,7 @@ export function ReportProblemSheet({
                     <span id="report-photos-label" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                       <Camera aria-hidden="true" className="size-4 text-primary" />
                       Fotos <span aria-hidden="true" className="text-destructive">*</span>
-                      <span className="font-mono font-normal tabular-nums text-muted-foreground">
+                      <span className="font-sans font-normal tabular-nums text-muted-foreground">
                         {images.length} {photoPlural.select(images.length) === 'one' ? 'foto' : 'fotos'}
                       </span>
                     </span>
@@ -484,7 +484,7 @@ export function ReportProblemSheet({
                           >
                             <X aria-hidden="true" className="size-3.5" />
                           </button>
-                          <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-white">
+                          <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 font-sans text-[10px] tabular-nums text-white">
                             #{index + 1}
                           </span>
                         </div>
@@ -502,7 +502,7 @@ export function ReportProblemSheet({
                     >
                       Título do problema <span aria-hidden="true" className="text-destructive">*</span>
                     </Label>
-                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                    <span className="shrink-0 font-sans text-[11px] tabular-nums text-muted-foreground">
                       {title.length}/70
                     </span>
                   </div>
@@ -581,7 +581,7 @@ export function ReportProblemSheet({
                     >
                       Descreva o problema <span aria-hidden="true" className="text-destructive">*</span>
                     </Label>
-                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                    <span className="shrink-0 font-sans text-[11px] tabular-nums text-muted-foreground">
                       {description.length}/400
                     </span>
                   </div>
@@ -619,7 +619,7 @@ export function ReportProblemSheet({
               <div className="shrink-0 border-t border-border bg-card/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-md md:px-5">
                 <div className="mb-2.5 flex items-center gap-3">
                   <AnimatedProgressBar value={requiredProgress} className="flex-1 rounded-full" />
-                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                  <span className="shrink-0 font-sans text-[11px] tabular-nums text-muted-foreground">
                     {completedRequiredFields}/4
                   </span>
                 </div>
