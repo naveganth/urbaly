@@ -4,11 +4,13 @@
  *
  * Rules:
  * - No `NEXT_PUBLIC_*` variables are used. All values are read on the server.
- * - `CARTO_API_KEY` / `GOOGLE_CLIENT_ID` must still reach the browser (map
- *   tiles and Google sign-in run client-side), so the server exposes just
- *   those two via `/api/public-config`. Nothing else leaves the server.
+ * - `CARTO_API_KEY` / `GOOGLE_CLIENT_ID` must still reach the browser (CARTO
+ *   fallback tiles and Google sign-in run client-side), so the server exposes
+ *   just those two via `/api/public-config`. Nothing else leaves the server.
  *   They are public by design: protect them with provider-side restrictions
  *   (CARTO HTTP-referrer allowlist, Google authorized origins), not secrecy.
+ *   The map boots on keyless OpenFreeMap; `CARTO_API_KEY` is fallback-only
+ *   and may be left unset.
  * - Backend URLs (`API_BASE_URL` / `AUTH_BASE_URL`) never leave the server.
  * - Missing config degrades loudly (server console warning) instead of
  *   silently pointing at the wrong backend.
@@ -125,7 +127,8 @@ export function getServerEnv() {
   if (!cartoApiKey) {
     warnOnce(
       'CARTO_API_KEY',
-      '[Urbaly env] CARTO_API_KEY is missing. The map falls back to the keyless CARTO style. ' +
+      '[Urbaly env] CARTO_API_KEY is missing. The map boots on keyless OpenFreeMap; ' +
+        'CARTO is fallback-only. Set it only if you want a keyed CARTO fallback. ' +
         'Create the repo-root `.env` (see `.env.example`) and restart `next dev`.',
     );
   }

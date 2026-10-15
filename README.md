@@ -25,7 +25,7 @@ O **URBALY** propõe solucionar essas falhas através de:
 ### Frontend (Web & Mobile)
 - **Framework:** [Next.js](https://nextjs.org/) (React + TypeScript)
 - **Estilização:** Tailwind CSS & Shadcn UI
-- **Mapeamento:** Leaflet / Mapbox (`react-map-gl`)
+- **Mapeamento:** MapLibre GL + OpenFreeMap (positron/dark, keyless; CARTO como fallback)
 
 ### Backend & Banco de Dados
 - **API Server:** [Rust](https://www.rust-lang.org/) (Actix-web / Axum)

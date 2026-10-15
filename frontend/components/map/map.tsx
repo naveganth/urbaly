@@ -25,7 +25,7 @@ import {
   categoryToApi,
   REPORT_IMAGE_CDN,
 } from './types';
-import { MapAccountButton, MapFilterButton, MapIconRail, MapSearchCard } from './map-shell';
+import { MapAccountButton, MapBasemapButton, MapFilterButton, MapIconRail, MapSearchCard } from './map-shell';
 import { ReportWizardSheet } from './report-wizard-card';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
@@ -33,13 +33,14 @@ import {
 } from './use-report-images';
 import { MapMarker } from './map-marker';
 import { createPlacementMarkerElement } from './placement-pin';
-import { fetchGoogleLikeStyle, getCartoBaseStyleUrl } from './google-maps-style';
+import {
+  DARK_BASEMAPS,
+  LIGHT_BASEMAPS,
+  fetchBasemapStyle,
+  getBasemapStyleUrl,
+  type BasemapId,
+} from './google-maps-style';
 import { usePublicConfig } from '@/lib/public-config';
-
-function getCartoVectorStyle(isDark: boolean, apiKey: string) {
-  const base = getCartoBaseStyleUrl(isDark);
-  return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
-}
 
 function prefersReducedMotion(): boolean {
   return (
@@ -252,31 +253,61 @@ export default function Map() {
     return counts;
   }, [reports]);
 
-  // Last theme applied to the basemap. Compared inside effects so the
-  // theme effect never re-applies the style the map was just constructed with.
-  const appliedStyleRef = React.useRef<boolean | null>(null);
+  // Last basemap + theme applied. Compared inside effects so the style
+  // effect never re-applies the style the map was just constructed with.
+  const appliedStyleRef = React.useRef<string | null>(null);
   // Safety-net timer so the UI can never spin forever: cleared on load/error.
   const loadTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Public runtime config (CARTO key) served by /api/public-config.
-  // The map waits for it before initializing; missing key falls back to the
-  // keyless CARTO style (server logs the warning once).
+  // Switchable basemap (Layers button). One stored preference; the effective
+  // choice is clamped to the current theme's options so a light-only pick
+  // (e.g. Liberty) degrades to Padrão in dark mode and restores on return.
+  const basemapOptions = isDark ? DARK_BASEMAPS : LIGHT_BASEMAPS;
+  const [basemap, setBasemap] = React.useState<BasemapId>(() => {
+    if (typeof window === 'undefined') return 'google';
+    try {
+      const raw = window.localStorage.getItem('urbaly-basemap');
+      return raw === 'bright' || raw === 'liberty' || raw === 'dark' || raw === 'fiord'
+        ? raw
+        : 'google';
+    } catch {
+      return 'google';
+    }
+  });
+  const effectiveBasemap = basemapOptions.some((option) => option.id === basemap)
+    ? basemap
+    : 'google';
+  const handleBasemapChange = React.useCallback((next: BasemapId) => {
+    setBasemap(next);
+    try {
+      window.localStorage.setItem('urbaly-basemap', next);
+    } catch {
+      // Private-mode storage failure: the choice still applies this session.
+    }
+  }, []);
+
+  // Public runtime config served by /api/public-config. The CARTO key is
+  // fallback-only now: the map boots immediately on keyless OpenFreeMap and
+  // never blocks waiting for this. Missing key degrades to the keyless
+  // CARTO fallback style (server logs the warning once).
   const publicConfig = usePublicConfig();
   const cartoApiKey = publicConfig?.cartoApiKey ?? '';
 
   // Initialize MapLibre (once per retry; theme switches go through setStyle below).
   React.useEffect(() => {
-    if (!mapContainerRef.current || !publicConfig) return;
+    if (!mapContainerRef.current) return;
 
     mapLoadedRef.current = false;
     setIsMapLoading(true);
     setMapError(null);
     const apiKey = cartoApiKey;
-    // NOTE: isDark is intentionally read once here; live theme switches are
-    // handled by the [isDark] effect via map.setStyle.
+    // NOTE: isDark / basemap are intentionally read once here; live switches
+    // are handled by the [isDark + basemap] effect via map.setStyle.
     const initialIsDark = isDark;
-    const initialStyle = getCartoVectorStyle(initialIsDark, apiKey);
-    appliedStyleRef.current = initialIsDark;
+    const initialBasemap = effectiveBasemap;
+    const initialStyle = getBasemapStyleUrl(initialBasemap, initialIsDark);
+    const initialStyleKey = `${initialBasemap}|${initialIsDark ? 'dark' : 'light'}`;
+    appliedStyleRef.current = initialStyleKey;
     let cancelled = false;
 
     const clearLoadTimeout = () => {
@@ -319,9 +350,10 @@ export default function Map() {
         style: initialStyle,
         attributionControl: false,
         transformRequest: (url: string) => {
-          // Propagate the CARTO API key to every vector tile asset
-          // (tiles.json, .mvt, sprites, glyphs) that the style.json references
-          // without an embedded key.
+          // CARTO fallback only: propagate the API key to every vector tile
+          // asset (tiles.json, .mvt, sprites, glyphs) that the fallback
+          // style.json references without an embedded key. OpenFreeMap URLs
+          // are keyless and pass through untouched.
           if (apiKey && url.includes('basemaps.cartocdn.com') && !/[?&]key=/.test(url)) {
             const separator = url.includes('?') ? '&' : '?';
             return { url: `${url}${separator}key=${encodeURIComponent(apiKey)}` };
@@ -347,16 +379,17 @@ export default function Map() {
 
     mapRef.current = map;
 
-    // Upgrade the CARTO base style to the user-palette repaint once the
-    // patched style JSON resolves. The map boots instantly on the base URL;
-    // this swaps colors in place (markers survive setStyle).
-    void fetchGoogleLikeStyle(initialIsDark, apiKey).then((googleStyle) => {
-      if (cancelled) return;
-      if (typeof googleStyle !== 'object' || googleStyle === null) return;
+    // Upgrade the base style to the resolved basemap (Google repaint or
+    // stock style) once it resolves. The map boots instantly on the base
+    // URL; this swaps in place (markers survive setStyle). Skipped when a
+    // newer basemap/theme switch already superseded this boot.
+    void fetchBasemapStyle(initialBasemap, initialIsDark, apiKey).then((basemapStyle) => {
+      if (cancelled || appliedStyleRef.current !== initialStyleKey) return;
+      if (typeof basemapStyle !== 'object' || basemapStyle === null) return;
       try {
-        map.setStyle(googleStyle as unknown as string);
+        map.setStyle(basemapStyle as unknown as string);
       } catch (styleError) {
-        console.warn('[Urbaly Map] Palette style apply failed, keeping base style:', styleError);
+        console.warn('[Urbaly Map] Basemap style apply failed, keeping base style:', styleError);
       }
     });
 
@@ -436,7 +469,7 @@ export default function Map() {
       if (!mapLoadedRef.current) {
         console.error(
           '[Urbaly Map] Style load timed out after 20s. ' +
-          `Style: ${initialStyle.split('?')[0]} | key present: ${apiKey ? 'yes' : 'no'} | ` +
+          `Style: ${initialStyle} | provider: openfreemap (carto fallback key: ${apiKey ? 'yes' : 'no'}) | ` +
           `style arrived: ${styleArrived ? 'yes' : 'no'}`
         );
         setIsMapLoading(false);
@@ -497,26 +530,28 @@ export default function Map() {
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapRetryKey, publicConfig]);
+  }, [mapRetryKey]);
 
-  // Update user-palette basemap on dark mode change without recreating the map.
-  // DOM markers (MapMarker / placement pin) survive setStyle, so no state is lost.
-  // Works before 'load' too: setStyle simply swaps the pending style request.
+  // Update the basemap on dark mode or Layers-button change without
+  // recreating the map. DOM markers (MapMarker / placement pin) survive
+  // setStyle, so no state is lost. Works before 'load' too: setStyle simply
+  // swaps the pending style request.
   React.useEffect(() => {
     const map = mapRef.current;
-    if (!map || !publicConfig) return;
-    if (appliedStyleRef.current === isDark) return;
-    appliedStyleRef.current = isDark;
+    if (!map) return;
+    const styleKey = `${effectiveBasemap}|${isDark ? 'dark' : 'light'}`;
+    if (appliedStyleRef.current === styleKey) return;
+    appliedStyleRef.current = styleKey;
     const apiKey = cartoApiKey;
-    void fetchGoogleLikeStyle(isDark, apiKey).then((nextStyle) => {
-      if (mapRef.current !== map) return;
+    void fetchBasemapStyle(effectiveBasemap, isDark, apiKey).then((nextStyle) => {
+      if (mapRef.current !== map || appliedStyleRef.current !== styleKey) return;
       try {
         map.setStyle(nextStyle as unknown as string);
       } catch (styleError) {
-        console.warn('[Urbaly Map] Theme style apply failed:', styleError);
+        console.warn('[Urbaly Map] Basemap style apply failed:', styleError);
       }
     });
-  }, [isDark, publicConfig, cartoApiKey]);
+  }, [isDark, effectiveBasemap, cartoApiKey]);
 
   // Handle map click for point placement mode
   React.useEffect(() => {
@@ -892,6 +927,15 @@ export default function Map() {
               </button>
             </div>
           )}
+
+          {/* Basemap style switcher — above the legend pill */}
+          <div className="absolute bottom-[calc(3.9rem+env(safe-area-inset-bottom))] left-3 z-10 md:left-4">
+            <MapBasemapButton
+              options={basemapOptions}
+              value={effectiveBasemap}
+              onChange={handleBasemapChange}
+            />
+          </div>
 
           {/* Bottom Legend — count only; pins are stable across zoom */}
           <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 font-sans text-[11px] backdrop-blur-md md:left-4 dark:bg-zinc-900/90">

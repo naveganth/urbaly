@@ -4,10 +4,11 @@ import { getServerEnv } from '@/lib/env';
 export const dynamic = 'force-dynamic';
 
 /**
- * Exposes ONLY the two browser-required public values (CARTO basemap key,
- * Google OAuth client ID). Both are public by design — the browser calls
- * CARTO tile servers and Google Identity Services directly. Everything else
- * in `lib/env.ts` stays on the server. Cacheable: values change per deploy.
+ * Exposes ONLY the two browser-required public values (CARTO fallback key,
+ * Google OAuth client ID). The map boots on keyless OpenFreeMap; the browser
+ * calls CARTO tile servers only on OpenFreeMap fallback, and Google Identity
+ * Services directly. Everything else in `lib/env.ts` stays on the server.
+ * Cacheable: values change per deploy.
  */
 export async function GET() {
   const { cartoApiKey, googleClientId } = getServerEnv();

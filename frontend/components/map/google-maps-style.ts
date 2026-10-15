@@ -1,12 +1,19 @@
 /**
- * Google Maps-like basemap for MapLibre GL, built on top of the existing
- * CARTO vector tiles (OpenMapTiles schema).
+ * Google Maps-like basemap for MapLibre GL, built on OpenMapTiles-schema
+ * vector tiles.
+ *
+ * Primary: OpenFreeMap (keyless, no limits) —
+ *   light: https://tiles.openfreemap.org/styles/positron
+ *   dark:  https://tiles.openfreemap.org/styles/dark
+ * Fallback: CARTO basemaps (kept so an existing CARTO_API_KEY still helps
+ *   when OpenFreeMap is unreachable).
  *
  * Why a local "library" instead of an npm package / Google raster tiles:
- * - Keeps your free CARTO tiles + API key (no new provider, no billing).
  * - No Google Terms-of-Service violation (raster scraping is forbidden).
  * - Zero new dependencies; resilient to upstream schema drift because we
- *   fetch the pinned CARTO style.json and only re-paint its layers.
+ *   fetch the base style.json and only re-paint its layers.
+ * - OpenFreeMap Positron/Dark are forks of the same positron/dark-matter
+ *   styles the CARTO bases come from, so the layer IDs below apply to both.
  *
  * Usage:
  *   const style = await fetchGoogleLikeStyle(isDark, apiKey);
@@ -94,6 +101,67 @@ export function getCartoBaseStyleUrl(isDark: boolean): string {
     : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 }
 
+/** Keyless OpenFreeMap base style (primary). */
+export function getOpenFreeMapBaseStyleUrl(isDark: boolean): string {
+  return isDark
+    ? 'https://tiles.openfreemap.org/styles/dark'
+    : 'https://tiles.openfreemap.org/styles/positron';
+}
+
+/** Instant-boot style URL: OpenFreeMap, no API key required. */
+export function getInitialBasemapStyleUrl(isDark: boolean): string {
+  return getOpenFreeMapBaseStyleUrl(isDark);
+}
+
+/** CARTO fallback style URL (used only when OpenFreeMap is unreachable). */
+export function getCartoVectorStyleUrl(isDark: boolean, apiKey: string): string {
+  const base = getCartoBaseStyleUrl(isDark);
+  return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
+}
+
+/* ------------------------------------------------------------------ */
+/* Switchable basemaps                                                  */
+/* ------------------------------------------------------------------ */
+
+export type BasemapId = 'google' | 'bright' | 'liberty' | 'dark' | 'fiord';
+
+export interface BasemapOption {
+  id: BasemapId;
+  label: string;
+  hint: string;
+}
+
+/** Light-mode choices: repainted positron plus two colorful stock styles. */
+export const LIGHT_BASEMAPS: BasemapOption[] = [
+  { id: 'google', label: 'Padrão', hint: 'Cores estilo Google' },
+  { id: 'bright', label: 'Bright', hint: 'Claro, colorido e detalhado' },
+  { id: 'liberty', label: 'Liberty 3D', hint: 'Com prédios em 3D' },
+];
+
+/** Dark-mode choices: repainted dark plus two stock dark styles. */
+export const DARK_BASEMAPS: BasemapOption[] = [
+  { id: 'google', label: 'Padrão', hint: 'Cores estilo Google' },
+  { id: 'dark', label: 'Dark', hint: 'Escuro minimalista' },
+  { id: 'fiord', label: 'Fiord', hint: 'Escuro em tons de azul' },
+];
+
+/** Instant-boot style URL for a basemap (keyless OpenFreeMap in all cases). */
+export function getBasemapStyleUrl(basemap: BasemapId, isDark: boolean): string {
+  switch (basemap) {
+    case 'bright':
+      return 'https://tiles.openfreemap.org/styles/bright';
+    case 'liberty':
+      return 'https://tiles.openfreemap.org/styles/liberty';
+    case 'dark':
+      return 'https://tiles.openfreemap.org/styles/dark';
+    case 'fiord':
+      return 'https://tiles.openfreemap.org/styles/fiord';
+    case 'google':
+    default:
+      return getInitialBasemapStyleUrl(isDark);
+  }
+}
+
 function withApiKeyUrls(style: Record<string, unknown>, apiKey: string): void {
   if (!apiKey) return;
   const appendKey = (url: unknown): string | undefined => {
@@ -116,7 +184,14 @@ function withApiKeyUrls(style: Record<string, unknown>, apiKey: string): void {
 }
 
 function isHighwayLayer(id: string): boolean {
-  return id.includes('_mot_') || id.includes('_trunk_');
+  // CARTO convention (_mot_/_trunk_) + OpenFreeMap convention
+  // (motorway/major; minor/path stay street-colored).
+  return (
+    id.includes('_mot_') ||
+    id.includes('_trunk_') ||
+    id.includes('motorway') ||
+    id.includes('_major')
+  );
 }
 
 function isRampLayer(id: string): boolean {
@@ -134,7 +209,7 @@ function patchLayer(layer: Record<string, unknown>, palette: GooglePalette): voi
     paint['background-color'] = palette.background;
     return;
   }
-  if (id === 'landcover' || id.startsWith('park_')) {
+  if (id === 'landcover' || id.startsWith('park_') || id === 'park' || id === 'landuse_park' || id === 'landcover_wood') {
     if (type === 'fill') paint['fill-color'] = palette.park;
     return;
   }
@@ -150,13 +225,24 @@ function patchLayer(layer: Record<string, unknown>, palette: GooglePalette): voi
     if (type === 'fill') paint['fill-color'] = palette.civic;
     return;
   }
+  if ((id === 'landcover_ice_shelf' || id === 'landcover_glacier') && type === 'fill') {
+    // Google renders ice caps near-white; blend into the background.
+    paint['fill-color'] = palette.background;
+    paint['fill-opacity'] = 1;
+    return;
+  }
+  if ((id === 'aeroway-area' || id === 'road_area_pier') && type === 'fill') {
+    paint['fill-color'] = palette.runway;
+    paint['fill-opacity'] = 1;
+    return;
+  }
   if (id === 'water' || id === 'water_shadow') {
     if (type === 'fill') {
       if (id === 'water') {
         paint['fill-color'] = palette.water;
         paint['fill-opacity'] = 1;
       } else {
-        // CARTO draws a soft offset shadow under water; Google doesn't.
+        // Positron/Dark draw a soft offset shadow under water; Google doesn't.
         paint['fill-opacity'] = 0;
       }
     }
@@ -180,15 +266,21 @@ function patchLayer(layer: Record<string, unknown>, palette: GooglePalette): voi
     paint['line-color'] = palette.boundary;
     return;
   }
-  if ((id === 'aeroway-runway' || id === 'aeroway-taxiway') && type === 'line') {
+  if ((id.startsWith('aeroway-runway') || id.startsWith('aeroway-taxiway')) && type === 'line') {
     paint['line-color'] = palette.runway;
     return;
   }
-  if ((id === 'rail' || id === 'rail_dash' || id === 'tunnel_rail' || id === 'tunnel_rail_dash') && type === 'line') {
+  if ((id.startsWith('rail') || id.startsWith('railway')) && type === 'line') {
     paint['line-color'] = palette.rail;
     return;
   }
-  if (id === 'tunnel_path' || id === 'road_path' || id === 'bridge_path') {
+  if (
+    id === 'tunnel_path' ||
+    id === 'road_path' ||
+    id === 'bridge_path' ||
+    id === 'highway_path' ||
+    id === 'road_pier'
+  ) {
     if (type === 'line') {
       paint['line-color'] = palette.path;
       paint['line-opacity'] = 1;
@@ -196,42 +288,67 @@ function patchLayer(layer: Record<string, unknown>, palette: GooglePalette): voi
     return;
   }
 
-  // Road network: CARTO splits every class into `_case` (casing/underlay)
-  // + `_fill` (inner) layers for road/tunnel/bridge. Recolor both so minor
-  // streets render white-with-gray-casing and motorways yellow, Google-style.
+  // Road network: every class is split into a casing/underlay layer plus an
+  // inner layer, for road/tunnel/bridge/highway. CARTO names them
+  // `_case`/`_fill`; OpenFreeMap names them `_casing`/`_inner` (plus
+  // `_subtle` narrow variants). Recolor both so minor streets render
+  // white-with-gray-casing and motorways yellow, Google-style.
   const isRoadNetwork =
-    id.startsWith('tunnel_') || id.startsWith('road_') || id.startsWith('bridge_');
+    id.startsWith('tunnel_') ||
+    id.startsWith('road_') ||
+    id.startsWith('bridge_') ||
+    id.startsWith('highway_');
   if (isRoadNetwork && type === 'line') {
     const highway = isHighwayLayer(id);
-    const isCase = id.endsWith('_case') || id.endsWith('_ramp');
+    const isCase = id.endsWith('_case') || id.endsWith('_ramp') || id.endsWith('_casing');
     if (isCase) {
       paint['line-color'] = highway ? palette.highwayCasing : palette.roadCasing;
     } else {
       paint['line-color'] = highway ? palette.highwayFill : palette.roadFill;
     }
     paint['line-opacity'] = 1;
-    // Ramps render one step narrower on Google; CARTO widths already encode
-    // this, so no width rewrite needed — color alone sells the look.
+    // Ramps render one step narrower on Google; the base widths already
+    // encode this, so no width rewrite needed — color alone sells the look.
     void isRampLayer;
     return;
   }
 
   // --- Labels ---------------------------------------------------------------
+  // Covers CARTO ids plus both OpenFreeMap variants (positron uses
+  // `label_*` / `highway-name-*`; dark uses `place_*` / `highway_name_*`).
   if (type === 'symbol') {
-    if (id === 'waterway_label' || id.startsWith('watername_')) {
+    if (
+      id === 'waterway_label' ||
+      id === 'waterway_line_label' ||
+      id === 'water_name' ||
+      id.startsWith('watername_') ||
+      id.startsWith('water_name')
+    ) {
       paint['text-color'] = palette.waterLabel;
       paint['text-halo-color'] = palette.halo;
       paint['text-halo-width'] = 1;
       return;
     }
-    if (id.startsWith('roadname_') || id === 'housenumber') {
+    if (
+      id.startsWith('roadname_') ||
+      id === 'housenumber' ||
+      id.startsWith('highway-name') ||
+      id.startsWith('highway_name_') ||
+      id.startsWith('highway-shield') ||
+      id === 'road_shield_us'
+    ) {
       paint['text-color'] = palette.roadLabel;
       paint['text-halo-color'] = palette.halo;
       paint['text-halo-width'] = 1.5;
       return;
     }
-    if (id.startsWith('place_')) {
-      const suburb = id.includes('suburb') || id.includes('hamlet') || id.includes('village');
+    if (id.startsWith('place_') || id.startsWith('label_') || id === 'airport') {
+      const suburb =
+        id.includes('suburb') ||
+        id.includes('hamlet') ||
+        id.includes('village') ||
+        id.includes('town') ||
+        id.includes('other');
       paint['text-color'] = suburb ? palette.suburbLabel : palette.placeLabel;
       paint['text-halo-color'] = palette.halo;
       paint['text-halo-width'] = 1.5;
@@ -265,9 +382,34 @@ export function toGoogleLikeStyle(
 const styleCache = new Map<string, Record<string, unknown>>();
 
 /**
- * Fetch the CARTO base style and return a Google-painted clone.
- * Falls back to the raw base URL string when the network fails so the map
- * can still boot (caller should handle `string | object`).
+ * Fetch a basemap style for immediate `map.setStyle` use.
+ * `google` returns the Google-painted clone (with CARTO fallback chain);
+ * every other basemap returns its stock OpenFreeMap style JSON, degrading
+ * to the Google-painted clone when the stock fetch fails so the map never
+ * goes blank from a switch.
+ */
+export async function fetchBasemapStyle(
+  basemap: BasemapId,
+  isDark: boolean,
+  apiKey = ''
+): Promise<Record<string, unknown> | string> {
+  if (basemap === 'google') return fetchGoogleLikeStyle(isDark, apiKey);
+  const url = getBasemapStyleUrl(basemap, isDark);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`OpenFreeMap style ${res.status}`);
+    return (await res.json()) as Record<string, unknown>;
+  } catch (error) {
+    console.warn(`[Urbaly Map] Basemap "${basemap}" fetch failed, using default style:`, error);
+    return fetchGoogleLikeStyle(isDark, apiKey);
+  }
+}
+
+/**
+ * Fetch the OpenFreeMap base style and return a Google-painted clone.
+ * Falls back to the CARTO base style (with API key when available), then to
+ * the raw OpenFreeMap base URL string so the map can still boot (caller
+ * should handle `string | object`).
  */
 export async function fetchGoogleLikeStyle(
   isDark: boolean,
@@ -277,17 +419,28 @@ export async function fetchGoogleLikeStyle(
   const cached = styleCache.get(cacheKey);
   if (cached) return cached;
 
-  const baseUrl = getCartoBaseStyleUrl(isDark);
-  const url = apiKey ? `${baseUrl}?key=${encodeURIComponent(apiKey)}` : baseUrl;
+  const openFreeMapUrl = getOpenFreeMapBaseStyleUrl(isDark);
   try {
-    const res = await fetch(url);
+    const res = await fetch(openFreeMapUrl);
+    if (!res.ok) throw new Error(`OpenFreeMap style ${res.status}`);
+    const base = (await res.json()) as Record<string, unknown>;
+    const patched = toGoogleLikeStyle(base, isDark);
+    styleCache.set(cacheKey, patched);
+    return patched;
+  } catch (openFreeMapError) {
+    console.warn('[Urbaly Map] OpenFreeMap style fetch failed, trying CARTO fallback:', openFreeMapError);
+  }
+
+  const cartoUrl = getCartoVectorStyleUrl(isDark, apiKey);
+  try {
+    const res = await fetch(cartoUrl);
     if (!res.ok) throw new Error(`CARTO style ${res.status}`);
     const base = (await res.json()) as Record<string, unknown>;
     const patched = toGoogleLikeStyle(base, isDark, apiKey);
     styleCache.set(cacheKey, patched);
     return patched;
   } catch (error) {
-    console.warn('[Urbaly Map] Google style fetch failed, using base CARTO style:', error);
-    return url;
+    console.warn('[Urbaly Map] Google style fetch failed, using base OpenFreeMap style:', error);
+    return openFreeMapUrl;
   }
 }

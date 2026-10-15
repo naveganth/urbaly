@@ -8,6 +8,7 @@ import {
   Check,
   Home,
   Info,
+  Layers,
   LayoutGrid,
   Map as MapIcon,
   Menu,
@@ -40,6 +41,7 @@ import {
 } from '@/components/ui/shadcn/sheet';
 import { CATEGORIES, CATEGORY_ORDER, type ReportCategory } from './types';
 import { CategoryIcon } from './category-icon';
+import type { BasemapId, BasemapOption } from './google-maps-style';
 
 export type MapNavItem = {
   label: string;
@@ -196,6 +198,73 @@ export function MapNavDrawer({
         </nav>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Basemap style switcher — floating Layers button + style picker       */
+/* ------------------------------------------------------------------ */
+
+export function MapBasemapButton({
+  options,
+  value,
+  onChange,
+}: {
+  options: BasemapOption[];
+  value: BasemapId;
+  onChange: (basemap: BasemapId) => void;
+}) {
+  const active = options.find((option) => option.id === value) ?? options[0];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`Estilo do mapa: ${active.label}. Trocar estilo do mapa`}
+        title={`Estilo do mapa: ${active.label}`}
+        className="flex size-11 cursor-pointer touch-manipulation items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground backdrop-blur-md transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted dark:bg-zinc-900/95"
+      >
+        <Layers className="size-5" />
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        sideOffset={8}
+        className="w-[min(17rem,calc(100vw-2rem))] rounded-xl border-border/70 p-1.5 shadow-md"
+      >
+        <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
+          Estilo do mapa
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="mx-1 mb-1" />
+
+        {options.map((option) => {
+          const isSelected = option.id === value;
+          return (
+            <DropdownMenuItem
+              key={option.id}
+              onClick={() => onChange(option.id)}
+              className={cn(
+                'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150',
+                isSelected && 'bg-accent/60'
+              )}
+            >
+              <span className="min-w-0 flex-1">
+                <span
+                  className="block truncate text-[13px] font-medium tracking-[-0.01em]"
+                  title={option.label}
+                >
+                  {option.label}
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {option.hint}
+                </span>
+              </span>
+              {isSelected ? <Check className="size-4 shrink-0 text-primary" /> : null}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

@@ -7,7 +7,7 @@ Map UI: MapLibre GL. Styling: Tailwind CSS + shadcn-style UI + SmoothUI motion.
 
 ```bash
 cd frontend
-cp ../.env.example ../.env   # fill in CARTO_API_KEY / GOOGLE_CLIENT_ID
+cp ../.env.example ../.env   # fill in GOOGLE_CLIENT_ID; CARTO_API_KEY optional (fallback only)
 npm install                  # also copies the MapLibre worker into public/maplibre/
 npm run dev                  # http://localhost:3000
 ```
@@ -23,5 +23,6 @@ npm run dev                  # http://localhost:3000
 ## Env
 
 Server-only, read via `lib/env.ts` (see root `.env.example`).
-Only `CARTO_API_KEY` and `GOOGLE_CLIENT_ID` reach the browser, through
-`/api/public-config`. Never use `NEXT_PUBLIC_*` for secrets.
+Map boots on keyless OpenFreeMap; only `CARTO_API_KEY` (fallback-only) and
+`GOOGLE_CLIENT_ID` reach the browser, through `/api/public-config`.
+Never use `NEXT_PUBLIC_*` for secrets.
