@@ -40,6 +40,7 @@ import {
   type BasemapId,
 } from './google-maps-style';
 import { usePublicConfig } from '@/lib/public-config';
+import { applyMapStyleWithCircleTransition } from '@/lib/theme-transition';
 
 function prefersReducedMotion(): boolean {
   return (
@@ -260,6 +261,15 @@ export default function Map() {
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
   const [geoHint, setGeoHint] = React.useState<string | null>(null);
+  // Find-my-location + entry prompt state.
+  const geolocateControlRef = React.useRef<maplibregl.GeolocateControl | null>(null);
+  const [isLocating, setIsLocating] = React.useState(false);
+  const [hasLocation, setHasLocation] = React.useState(false);
+  const [showGeoPrompt, setShowGeoPrompt] = React.useState(false);
+  // Tracks the last applied theme so basemap-only switches can use the
+  // center-circle reveal while theme-driven swaps rely on the root theme
+  // transition (avoids a double animation).
+  const prevIsDarkRef = React.useRef<boolean | null>(null);
   // Retry resets loading/error in the event handler (not in the effect body)
   // so the fetch effect above never calls setState synchronously.
   const handleRetryMap = React.useCallback(() => {
@@ -289,6 +299,72 @@ export default function Map() {
       window.clearTimeout(slowTimer);
     };
   }, [isMapLoading, mapError]);
+
+  // Entry localization prompt: ask once per browser until answered.
+  // Never fires the native permission itself — only the soft prompt;
+  // the native request runs on "Ativar localização" tap (user gesture).
+  React.useEffect(() => {
+    if (isMapLoading || mapError || hasLocation) return;
+    let dismissed = false;
+    let granted = false;
+    try {
+      dismissed = window.localStorage.getItem('urbaly-geo-prompt') === 'dismissed';
+      granted = window.localStorage.getItem('urbaly-geo-granted') === '1';
+    } catch {
+      // Private-mode storage failure: still show the prompt once.
+    }
+    if (dismissed || granted) return;
+    // If the OS permission is already granted, skip the prompt — the
+    // locate button will just work.
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'geolocation' as PermissionName })
+        .then((status) => {
+          if (status.state === 'granted') {
+            try {
+              window.localStorage.setItem('urbaly-geo-granted', '1');
+            } catch {
+              // Ignored — see above.
+            }
+            return;
+          }
+          if (status.state !== 'denied') {
+            const timer = window.setTimeout(() => setShowGeoPrompt(true), 900);
+            void timer;
+          }
+        })
+        .catch(() => {
+          const timer = window.setTimeout(() => setShowGeoPrompt(true), 900);
+          void timer;
+        });
+      return;
+    }
+    const timer = window.setTimeout(() => setShowGeoPrompt(true), 900);
+    return () => window.clearTimeout(timer);
+  }, [isMapLoading, mapError, hasLocation]);
+
+  const handleDismissGeoPrompt = React.useCallback(() => {
+    setShowGeoPrompt(false);
+    try {
+      window.localStorage.setItem('urbaly-geo-prompt', 'dismissed');
+    } catch {
+      // Ignored — the prompt simply shows again next visit.
+    }
+  }, []);
+
+  const handleAcceptGeoPrompt = React.useCallback(() => {
+    setShowGeoPrompt(false);
+    setGeoHint(null);
+    setIsLocating(true);
+    try {
+      geolocateControlRef.current?.trigger();
+    } catch {
+      setIsLocating(false);
+      setGeoHint(
+        'Não conseguimos abrir a solicitação de localização. Toque no botão de localização no canto inferior direito.'
+      );
+    }
+  }, []);
 
   // Search and filter state (Google Maps-style pills). Persisted URL values
   // come from a hydration-safe external store; keystrokes live in drafts.
@@ -394,20 +470,25 @@ export default function Map() {
   const publicConfig = usePublicConfig();
   const cartoApiKey = publicConfig?.cartoApiKey ?? '';
 
-  // Reset-view state: restores north-up, pitch, center, and zoom.
-  // The control is always active — no disabled state.
+  // Reset-view state: restores the default camera (zoom/bearing/pitch)
+  // at the point the user is at — keeps the current center and clears
+  // any panel padding so the point is truly centered on every
+  // breakpoint. The control is always active — no disabled state.
   const handleResetView = React.useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
     try {
+      const center = map.getCenter();
+      const padding = { top: 0, bottom: 0, left: 0, right: 0 };
       if (prefersReducedMotion()) {
-        map.jumpTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, bearing: 0, pitch: 0 });
+        map.jumpTo({ center, zoom: DEFAULT_ZOOM, bearing: 0, pitch: 0, padding });
       } else {
         map.easeTo({
-          center: DEFAULT_CENTER,
+          center,
           zoom: DEFAULT_ZOOM,
           bearing: 0,
           pitch: 0,
+          padding,
           duration: 600,
         });
       }
@@ -612,33 +693,79 @@ export default function Map() {
     const geolocateControl = new maplibregl.GeolocateControl({
       positionOptions: {
         enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
       },
       trackUserLocation: false,
       showUserLocation: true,
       showAccuracyCircle: true,
     });
+    geolocateControlRef.current = geolocateControl;
     // Fly to the user once located; explain failures inline (no alert()).
+    // Clears panel padding so the user dot is truly centered on mobile too.
     geolocateControl.on('geolocate', (position) => {
       setGeoHint(null);
+      setIsLocating(false);
+      setHasLocation(true);
+      try {
+        window.localStorage.setItem('urbaly-geo-granted', '1');
+      } catch {
+        // Private-mode storage failure: location still works this session.
+      }
       try {
         const coords = (position as unknown as { coords?: { longitude?: unknown; latitude?: unknown } })?.coords;
         if (typeof coords?.longitude !== 'number' || typeof coords?.latitude !== 'number') return;
         const center: [number, number] = [coords.longitude, coords.latitude];
+        const padding = { top: 0, bottom: 0, left: 0, right: 0 };
         if (prefersReducedMotion()) {
-          map.jumpTo({ center, zoom: Math.max(map.getZoom(), 15) });
+          map.jumpTo({ center, zoom: Math.max(map.getZoom(), 15), padding });
         } else {
-          map.easeTo({ center, zoom: Math.max(map.getZoom(), 15), duration: 600 });
+          map.easeTo({
+            center,
+            zoom: Math.max(map.getZoom(), 15),
+            padding,
+            duration: 600,
+          });
         }
       } catch {
         // Framing the user location is a nicety; the dot still shows.
       }
     });
-    geolocateControl.on('error', () => {
-      setGeoHint(
-        'Não conseguimos sua localização. Permita o acesso à localização no navegador e tente de novo.'
-      );
+    geolocateControl.on('error', (event) => {
+      setIsLocating(false);
+      const code = (event as unknown as { code?: number })?.code;
+      if (code === 1) {
+        setGeoHint(
+          'Localização bloqueada. Permita o acesso à localização nas configurações do navegador para reportar e centralizar o mapa.'
+        );
+      } else if (code === 3) {
+        setGeoHint(
+          'A localização demorou demais (rede/GPS lento?). Tente de novo em local aberto.'
+        );
+      } else {
+        setGeoHint(
+          'Não conseguimos sua localização. Verifique o GPS e tente de novo.'
+        );
+      }
     });
     map.addControl(geolocateControl, 'bottom-right');
+    // Localize the stock button (MapLibre ships English labels) and track
+    // the locating spinner state for the pulse affordance.
+    try {
+      const locateButton = map
+        .getContainer()
+        .querySelector('.maplibregl-ctrl-geolocate button');
+      if (locateButton instanceof HTMLButtonElement) {
+        locateButton.setAttribute('aria-label', 'Encontrar minha localização');
+        locateButton.title = 'Encontrar minha localização';
+        locateButton.addEventListener('click', () => {
+          setGeoHint(null);
+          setIsLocating(true);
+        });
+      }
+    } catch {
+      // Label nicety; the control works without it.
+    }
     // Reset view stacks natively under Find-my-location.
     map.addControl(new ResetViewControl(handleResetView), 'bottom-right');
 
@@ -651,6 +778,7 @@ export default function Map() {
       map.off('styledata', onStyleData);
       resizeObserver?.disconnect();
       setMapInstance(null);
+      geolocateControlRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -661,20 +789,35 @@ export default function Map() {
   // recreating the map. DOM markers (MapMarker / placement pin) survive
   // setStyle, so no state is lost. Works before 'load' too: setStyle simply
   // swaps the pending style request.
+  // Theme-driven swaps skip the circle (the root theme transition already
+  // reveals from the center); basemap-only switches get the same
+  // center-circle reveal via the shared ::view-transition-new(root) rule.
   React.useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const styleKey = `${effectiveBasemap}|${isDark ? 'dark' : 'light'}`;
-    if (appliedStyleRef.current === styleKey) return;
+    if (appliedStyleRef.current === styleKey) {
+      prevIsDarkRef.current = isDark;
+      return;
+    }
+    const themeChanged = prevIsDarkRef.current !== null && prevIsDarkRef.current !== isDark;
+    prevIsDarkRef.current = isDark;
     appliedStyleRef.current = styleKey;
     const apiKey = cartoApiKey;
     void fetchBasemapStyle(effectiveBasemap, isDark, apiKey).then((nextStyle) => {
       if (mapRef.current !== map || appliedStyleRef.current !== styleKey) return;
-      try {
-        map.setStyle(nextStyle as unknown as string);
-      } catch (styleError) {
-        console.warn('[Urbaly Map] Basemap style apply failed:', styleError);
+      const applyStyle = () => {
+        try {
+          map.setStyle(nextStyle as unknown as string);
+        } catch (styleError) {
+          console.warn('[Urbaly Map] Basemap style apply failed:', styleError);
+        }
+      };
+      if (themeChanged) {
+        applyStyle();
+        return;
       }
+      applyMapStyleWithCircleTransition(applyStyle);
     });
   }, [isDark, effectiveBasemap, cartoApiKey]);
 
@@ -742,14 +885,50 @@ export default function Map() {
   }, [isPlacementMode]);
 
   // Clean up placement marker when cancelled
-  const handleCancelPlacement = () => {
+  const handleCancelPlacement = React.useCallback(() => {
     setIsPlacementMode(false);
     setPlacementCoordinates(null);
     if (placementMarkerRef.current) {
       placementMarkerRef.current.remove();
       placementMarkerRef.current = null;
     }
-  };
+  }, []);
+
+  // Report gate: reporting requires an enabled location. Without it,
+  // re-open the entry prompt instead of entering placement mode.
+  const handleReportClick = React.useCallback(() => {
+    if (!hasLocation) {
+      setShowGeoPrompt(true);
+      setGeoHint(
+        'Você só pode reportar com a localização ativada. Toque em “Ativar localização”.'
+      );
+      return;
+    }
+    if (isPlacementMode) {
+      handleCancelPlacement();
+    } else {
+      setIsPlacementMode(true);
+    }
+  }, [hasLocation, isPlacementMode, handleCancelPlacement]);
+
+  // Locating pulse on the stock button while the fix is in flight.
+  React.useEffect(() => {
+    try {
+      const locateButton = mapContainerRef.current?.querySelector(
+        '.maplibregl-ctrl-geolocate button'
+      );
+      if (locateButton instanceof HTMLButtonElement) {
+        locateButton.classList.toggle('is-locating', isLocating);
+        if (isLocating) {
+          locateButton.setAttribute('aria-busy', 'true');
+        } else {
+          locateButton.removeAttribute('aria-busy');
+        }
+      }
+    } catch {
+      // Visual nicety only.
+    }
+  }, [isLocating, mapInstance]);
 
   // Google Maps-like: keep the selected pin visible once the panel reveals,
   // offsetting for the floating card instead of centering under it.
@@ -979,8 +1158,60 @@ export default function Map() {
             <MapAccountButton />
           </div>
 
+          {/* Entry localization prompt — soft ask, native request only on tap.
+              Reporting is gated on location (see handleReportClick). */}
+          {showGeoPrompt && !hasLocation && !mapError && (
+            <div
+              role="dialog"
+              aria-live="polite"
+              aria-label="Usar minha localização"
+              className="absolute inset-x-3 top-[68px] z-20 mx-auto flex max-w-md flex-col gap-2.5 rounded-2xl border border-primary/30 bg-background/95 px-4 py-3.5 backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
+            >
+              <div className="flex items-start gap-2.5">
+                <Crosshair aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-sans text-sm font-semibold text-foreground">
+                    Usar minha localização?
+                  </p>
+                  <p className="mt-0.5 font-sans text-xs leading-relaxed text-muted-foreground">
+                    Você só pode reportar com a localização ativada. Usamos sua posição para
+                    centralizar o mapa e anexar o local do reporte.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDismissGeoPrompt}
+                  aria-label="Agora não"
+                  className="flex size-9 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="flex gap-2 pl-7">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAcceptGeoPrompt}
+                  disabled={isLocating}
+                  className="h-9 flex-1 rounded-full px-4 text-xs font-semibold"
+                >
+                  {isLocating ? 'Localizando…' : 'Ativar localização'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleDismissGeoPrompt}
+                  className="h-9 rounded-full px-4 text-xs"
+                >
+                  Agora não
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Location feedback — friendly, dismissible, never a native alert */}
-          {geoHint && (
+          {geoHint && !showGeoPrompt && (
             <div
               role="status"
               className="absolute inset-x-3 top-[68px] z-20 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-border/70 bg-background/95 px-3 py-2.5 text-xs font-medium text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
@@ -1146,19 +1377,15 @@ export default function Map() {
               );
             })}
 
-          {/* Report FAB — flat Maps-style action above bottom-right controls */}
+          {/* Report FAB — flat Maps-style action above bottom-right controls.
+              Gated on location: without it, re-opens the entry prompt. */}
           <button
             type="button"
-            onClick={() => {
-              setIsPlacementMode((prev) => !prev);
-              if (isPlacementMode) {
-                handleCancelPlacement();
-              }
-            }}
+            onClick={handleReportClick}
             aria-pressed={isPlacementMode}
             aria-label={isPlacementMode ? 'Cancelar modo de marcação' : 'Reportar problema no mapa'}
-            aria-describedby={!jwt && !isPlacementMode ? 'report-fab-auth-hint' : undefined}
-            title={!jwt && !isPlacementMode ? 'Entre com sua conta Google para publicar' : undefined}
+            aria-describedby={!hasLocation && !isPlacementMode ? 'report-fab-geo-hint' : undefined}
+            title={!hasLocation && !isPlacementMode ? 'Ative sua localização para reportar' : undefined}
             className={cn(
               'absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 flex h-12 cursor-pointer touch-manipulation items-center gap-2 rounded-full border border-transparent px-5 font-sans text-sm font-semibold outline-none transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring md:bottom-3 md:right-4',
               selectedReport &&
@@ -1180,6 +1407,11 @@ export default function Map() {
               <>Reportar</>
             )}
           </button>
+          {!hasLocation && !isPlacementMode && (
+            <span id="report-fab-geo-hint" className="sr-only">
+              Você só pode reportar com a localização ativada.
+            </span>
+          )}
           {!jwt && !isPlacementMode && (
             <span id="report-fab-auth-hint" className="sr-only">
               Para publicar um reporte, entre com sua conta Google.

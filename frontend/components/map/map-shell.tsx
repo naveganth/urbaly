@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/shadcn/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
+import { toggleThemeWithTransition } from '@/lib/theme-transition';
 import { useAuth } from '@/lib/auth-context';
 import { getAvatarUrl, getInitials } from '@/lib/auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
@@ -114,7 +115,7 @@ export function MapIconRail({ className }: { className?: string }) {
       <div className="mt-auto flex flex-col items-center gap-1">
         <button
           type="button"
-          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          onClick={() => toggleThemeWithTransition(resolvedTheme, setTheme)}
           aria-label={resolvedTheme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
           className="flex size-11 cursor-pointer touch-manipulation items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

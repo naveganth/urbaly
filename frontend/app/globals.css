@@ -257,6 +257,36 @@
   height: 28px;
 }
 
+/* Find-my-location locating affordance: soft pulse while the fix is in
+   flight (toggled via .is-locating in map.tsx). Respects reduced motion. */
+.maplibregl-ctrl-geolocate button.is-locating {
+  position: relative;
+}
+
+.maplibregl-ctrl-geolocate button.is-locating::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 9999px;
+  border: 2px solid var(--primary);
+  border-top-color: transparent;
+  animation: locate-spin 0.8s linear infinite;
+}
+
+@keyframes locate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maplibregl-ctrl-geolocate button.is-locating::after {
+    animation: none;
+    border-top-color: var(--primary);
+    opacity: 0.5;
+  }
+}
+
 /* Flat full-text attribution, docked to the bottom edge between the
    legend pill (left) and the Reportar FAB (right). Hidden on mobile,
    where the bottom strip has no room for it. */
