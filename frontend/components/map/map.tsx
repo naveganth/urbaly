@@ -26,7 +26,7 @@ import {
   REPORT_IMAGE_CDN,
 } from './types';
 import { SearchFilters } from './search-filters';
-import { ReportProblemSheet } from './report-problem-sheet';
+import { ReportWizardSheet } from './report-wizard-card';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
   useGatedReportImages,
@@ -590,6 +590,30 @@ export default function Map() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReport?.id, isDetailsReady]);
 
+  // Maps-like: keep the placement pin visible once the form card reveals,
+  // offsetting for the right-docked card instead of centering under it.
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isSheetOpen || !placementCoordinates) return;
+    try {
+      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+      if (prefersReducedMotion()) {
+        map.jumpTo({ center: placementCoordinates });
+        return;
+      }
+      map.easeTo({
+        center: placementCoordinates,
+        duration: 600,
+        padding: isDesktop
+          ? { top: 132, bottom: 60, left: 60, right: 440 }
+          : { top: 60, bottom: 380, left: 20, right: 20 },
+      });
+    } catch {
+      // Padding-aware pan is a nicety; never break placement if it fails.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSheetOpen]);
+
   // Detail-view coverage: the open record names itself in the tab title.
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -825,8 +849,9 @@ export default function Map() {
           </div>
         )}
 
-        {/* Placement Mode Top Overlay Banner — sits below the floating search */}
-        {isPlacementMode && (
+        {/* Placement Mode Top Overlay Banner — sits below the floating search.
+            Hidden once the form card takes over (the point is already picked). */}
+        {isPlacementMode && !isSheetOpen && (
           <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[116px] dark:bg-zinc-900/95">
             <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
             <Crosshair aria-hidden="true" className="size-4 text-primary" />
@@ -937,6 +962,9 @@ export default function Map() {
             'absolute bottom-[calc(4rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
             selectedReport &&
             'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
+            // The right-docked form card owns the FAB corner on every
+            // breakpoint while the reporting flow is active.
+            isSheetOpen && 'pointer-events-none translate-y-2 opacity-0',
             isPlacementMode
               ? 'bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600'
               : 'bg-primary text-primary-foreground shadow-primary/30 hover:bg-primary/90'
@@ -998,17 +1026,17 @@ export default function Map() {
             />
           )}
         </AnimatePresence>
-      </div>
 
-      {/* Report Problem Sheet (Drawer with SmoothUI Multi-File Upload) */}
-      <ReportProblemSheet
-        isOpen={isSheetOpen}
-        onOpenChange={setIsSheetOpen}
-        coordinates={placementCoordinates}
-        onSubmit={handleAddReport}
-        onCancelPlacement={handleCancelPlacement}
-        isAuthenticated={!!jwt}
-      />
+        {/* Report form: 3-step wizard card / bottom sheet over the basemap */}
+        <ReportWizardSheet
+          isOpen={isSheetOpen}
+          onOpenChange={setIsSheetOpen}
+          coordinates={placementCoordinates}
+          onSubmit={handleAddReport}
+          onCancelPlacement={handleCancelPlacement}
+          isAuthenticated={!!jwt}
+        />
+      </div>
     </div>
   );
 }
