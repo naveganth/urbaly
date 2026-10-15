@@ -75,7 +75,7 @@ function PanelShell({
       transition={shouldReduceMotion ? { duration: 0 } : SPRING_DEFAULT}
       className={cn(
         PANEL_POSITION,
-        'flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card text-card-foreground shadow-2xl md:rounded-2xl md:border-b'
+        'flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card font-sans text-card-foreground md:rounded-2xl md:border-b'
       )}
     >
       {/* Mobile grabber — desktop floats, no handle needed */}
@@ -375,7 +375,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
           </Badge>
         </div>
 
-        <h2 className="mt-2 text-base font-bold leading-snug tracking-tight text-foreground md:text-lg">
+        <h2 className="mt-2 font-heading text-base font-bold leading-snug tracking-tight text-foreground md:text-lg">
           {report.title}
         </h2>
         <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground md:text-xs">

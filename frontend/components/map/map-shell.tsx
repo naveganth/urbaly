@@ -31,7 +31,6 @@ import { useTheme } from '@/components/theme-provider';
 import { useAuth } from '@/lib/auth-context';
 import { getAvatarUrl, getInitials } from '@/lib/auth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/shadcn/avatar';
-import { Button } from '@/components/ui/shadcn/button';
 import {
   Sheet,
   SheetContent,
@@ -227,15 +226,17 @@ export function MapSearchCard({
     <div
       role="search"
       className={cn(
-        'flex h-12 items-center gap-1 rounded-full border border-border/70 bg-background/95 py-1 pl-1 pr-1.5 shadow-lg backdrop-blur-md dark:bg-zinc-900/95',
+        'flex h-12 items-center gap-1 rounded-full border border-border/70 bg-background/95 py-1 pl-1 pr-1.5 backdrop-blur-md dark:bg-zinc-900/95',
         className
       )}
     >
-      <MapNavDrawer
-        open={drawerOpen}
-        onOpenChange={onDrawerChange}
-        trigger={drawerOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-      />
+      <span className="shrink-0 md:hidden">
+        <MapNavDrawer
+          open={drawerOpen}
+          onOpenChange={onDrawerChange}
+          trigger={drawerOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+        />
+      </span>
       <div className="relative min-w-0 flex-1">
         <input
           ref={inputRef}
@@ -244,7 +245,7 @@ export function MapSearchCard({
           placeholder={isLoading ? 'Carregando…' : 'Buscar no mapa...'}
           aria-label="Buscar ocorrências"
           aria-busy={isLoading}
-          className="h-10 w-full rounded-full bg-transparent pr-8 text-sm tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
+          className="h-10 w-full rounded-full bg-transparent pr-8 font-sans text-sm tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
         />
         {searchQuery ? (
           <button
@@ -312,9 +313,9 @@ export function MapCategoryPills({
             onClick={() => onCategoryChange(pill.key)}
             aria-pressed={active}
             className={cn(
-              'inline-flex h-9 shrink-0 cursor-pointer touch-manipulation snap-start items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-medium shadow-md backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex h-9 shrink-0 cursor-pointer touch-manipulation snap-start items-center gap-1.5 whitespace-nowrap rounded-full border px-3 font-sans text-xs font-medium backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               active
-                ? 'border-primary/40 bg-primary text-primary-foreground shadow-primary/20'
+                ? 'border-primary/40 bg-primary text-primary-foreground'
                 : 'border-border/70 bg-background/95 text-foreground hover:bg-muted dark:bg-zinc-900/95'
             )}
           >
@@ -343,14 +344,13 @@ export function MapAccountButton() {
 
   if (status !== 'authenticated') {
     return (
-      <Button
+      <button
         type="button"
-        size="sm"
         onClick={() => router.push('/login')}
-        className="h-10 shrink-0 rounded-full px-4 text-xs font-semibold shadow-lg"
+        className="h-10 shrink-0 cursor-pointer touch-manipulation rounded-full border border-transparent bg-primary px-4 font-sans text-xs font-semibold text-primary-foreground outline-none transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
       >
         Entrar
-      </Button>
+      </button>
     );
   }
 
@@ -359,7 +359,7 @@ export function MapAccountButton() {
       type="button"
       onClick={() => router.push('/perfil')}
       aria-label="Abrir meu perfil"
-      className="shrink-0 rounded-full bg-background p-0.5 shadow-lg outline-none ring-1 ring-border/70 focus-visible:ring-2 focus-visible:ring-ring dark:bg-zinc-900"
+      className="shrink-0 cursor-pointer rounded-full border border-border/70 bg-background p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-zinc-900"
     >
       <Avatar className="size-9 border-0">
         <AvatarImage src={getAvatarUrl(user) ?? '/pfp.svg'} />
@@ -402,7 +402,7 @@ export function MapFilterButton({
         <DropdownMenuContent
           align="end"
           sideOffset={8}
-          className="max-h-[72vh] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border-border/70 p-1.5 shadow-xl"
+          className="max-h-[72vh] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border-border/70 p-1.5 shadow-md"
         >
           <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
             Categorias

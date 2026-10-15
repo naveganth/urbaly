@@ -316,6 +316,7 @@ export default function Map() {
       map = new maplibregl.Map({
         container: mapContainerRef.current,
         style: initialStyle,
+        attributionControl: false,
         transformRequest: (url: string) => {
           // Propagate the CARTO API key to every vector tile asset
           // (tiles.json, .mvt, sprites, glyphs) that the style.json references
@@ -446,6 +447,10 @@ export default function Map() {
       }
     }, 20000);
 
+    map.addControl(
+      new maplibregl.AttributionControl({ compact: true }),
+      'bottom-left'
+    );
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.addControl(
       new maplibregl.GeolocateControl({
@@ -842,7 +847,7 @@ export default function Map() {
           {/* Placement Mode Top Overlay Banner — sits below pills.
               Hidden once the form card takes over (the point is already picked). */}
           {isPlacementMode && !isSheetOpen && (
-            <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[128px] dark:bg-zinc-900/95">
+            <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center font-sans text-xs font-semibold text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[128px] dark:bg-zinc-900/95">
               <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
               <Crosshair aria-hidden="true" className="size-4 text-primary" />
               <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
@@ -858,7 +863,7 @@ export default function Map() {
           )}
 
           {/* Bottom Legend — count only; pins are stable across zoom */}
-          <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 text-[11px] shadow-lg backdrop-blur-md md:left-4 dark:bg-zinc-900/90">
+          <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 font-sans text-[11px] backdrop-blur-md md:left-4 dark:bg-zinc-900/90">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <span className="font-mono font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
               <span className="leading-tight">no mapa</span>
@@ -872,7 +877,7 @@ export default function Map() {
             !mapError &&
             !reportsError && (
               <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
-                <div className="flex max-w-sm flex-col items-center gap-2 rounded-2xl border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
+                <div className="flex max-w-sm flex-col items-center gap-2 rounded-2xl border border-border bg-background/95 px-4 py-3 text-center font-sans text-xs text-muted-foreground backdrop-blur-md dark:bg-zinc-900/95">
                   <Info className="size-4 text-amber-500" />
                   <span>
                     {hasActiveFilters
@@ -935,8 +940,8 @@ export default function Map() {
               );
             })}
 
-          {/* Report FAB — Maps-style floating action above bottom-right controls */}
-          <Button
+          {/* Report FAB — flat Maps-style action above bottom-right controls */}
+          <button
             type="button"
             onClick={() => {
               setIsPlacementMode((prev) => !prev);
@@ -949,15 +954,15 @@ export default function Map() {
             aria-describedby={!jwt && !isPlacementMode ? 'report-fab-auth-hint' : undefined}
             title={!jwt && !isPlacementMode ? 'Entre com sua conta Google para publicar' : undefined}
             className={cn(
-              'absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
+              'absolute bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 flex h-12 cursor-pointer touch-manipulation items-center gap-2 rounded-full border border-transparent px-5 font-sans text-sm font-semibold outline-none transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring md:bottom-8 md:right-4',
               selectedReport &&
               'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
               // The right-docked form card owns the FAB corner on every
               // breakpoint while the reporting flow is active.
               isSheetOpen && 'pointer-events-none translate-y-2 opacity-0',
               isPlacementMode
-                ? 'bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600'
-                : 'bg-primary text-primary-foreground shadow-primary/30 hover:bg-primary/90'
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
             )}
           >
             {isPlacementMode ? (
@@ -971,7 +976,7 @@ export default function Map() {
                 Reportar
               </>
             )}
-          </Button>
+          </button>
           {!jwt && !isPlacementMode && (
             <span id="report-fab-auth-hint" className="sr-only">
               Para publicar um reporte, entre com sua conta Google.
@@ -987,7 +992,7 @@ export default function Map() {
                 role="status"
                 aria-label="Carregando detalhes da ocorrência"
                 aria-busy="true"
-                className="absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[136px] md:bottom-6 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card shadow-2xl md:rounded-2xl md:border-b"
+                className="absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[136px] md:bottom-6 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card md:rounded-2xl md:border-b"
               >
                 <div aria-hidden="true" className="h-52 w-full shrink-0 animate-pulse bg-muted md:h-56" />
                 <div aria-hidden="true" className="flex flex-col gap-2.5 px-4 py-4 md:px-5">

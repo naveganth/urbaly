@@ -150,23 +150,21 @@
   animation: photo-pin-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Maps-style controls: bottom-right stack of circular white cards.
-   Navigation (zoom) + geolocate are added with 'bottom-right' in map.tsx.
-   Mobile shows locate only (zoom hidden) like the Google Maps app. */
+/* Maps-style controls: bottom-right stack of flat circular cards.
+   FAB sits at bottom 4.5rem mobile / 2rem desktop; controls stack above it. */
 .maplibregl-ctrl-bottom-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
   margin-right: calc(12px + env(safe-area-inset-right));
-  /* Sits above the Reportar FAB (FAB ~ bottom 5.5rem mobile / 2rem desktop). */
-  margin-bottom: calc(10rem + env(safe-area-inset-bottom));
+  margin-bottom: calc(4.5rem + 60px + env(safe-area-inset-bottom));
 }
 
 @media (min-width: 768px) {
   .maplibregl-ctrl-bottom-right {
     margin-right: 16px;
-    margin-bottom: calc(7rem + env(safe-area-inset-bottom));
+    margin-bottom: 96px;
   }
 }
 
@@ -174,7 +172,7 @@
   border: 1px solid var(--border);
   border-radius: 9999px;
   background: var(--card);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -182,7 +180,7 @@
 
 .dark .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
   background: oklch(0.21 0.006 285.885 / 0.95);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
 }
 
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button {
@@ -211,12 +209,20 @@
   }
 }
 
-/* Keep attribution compact and clear of the legend/FAB. */
+/* Compact attribution pinned bottom-left, clear of the legend pill. */
+.maplibregl-ctrl-bottom-left {
+  margin-left: calc(8px + env(safe-area-inset-left));
+  margin-bottom: calc(4px + env(safe-area-inset-bottom));
+}
+
 .maplibregl-ctrl-attrib {
+  font-family: var(--font-sans);
   font-size: 10px;
-  border-radius: 8px 0 0 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
   background: color-mix(in srgb, var(--card) 82%, transparent);
   backdrop-filter: blur(8px);
+  box-shadow: none;
 }
 
 .maplibregl-ctrl-attrib a {
