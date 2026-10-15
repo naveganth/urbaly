@@ -151,20 +151,20 @@
 }
 
 /* Maps-style controls: bottom-right stack of flat circular cards.
-   FAB sits at bottom 4.5rem mobile / 2rem desktop; controls stack above it. */
+   The stack clears the bottom-edge FAB (h-12 at 2px + safe-area). */
 .maplibregl-ctrl-bottom-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
   margin-right: calc(12px + env(safe-area-inset-right));
-  margin-bottom: calc(4.5rem + 60px + env(safe-area-inset-bottom));
+  margin-bottom: calc(70px + env(safe-area-inset-bottom));
 }
 
 @media (min-width: 768px) {
   .maplibregl-ctrl-bottom-right {
     margin-right: 16px;
-    margin-bottom: 96px;
+    margin-bottom: 70px;
   }
 }
 
@@ -240,20 +240,63 @@
   }
 }
 
-/* Compact attribution pinned bottom-left, clear of the legend pill. */
+/* Reset-view control shares the native group look (44px lone circle) and
+   the native sprite color (#333, inverted in dark — same treatment as
+   .maplibregl-ctrl-icon) so it reads as one set with Find-my-location. */
+.maplibregl-ctrl-reset-view button {
+  color: #333;
+}
+
+.dark .maplibregl-ctrl-reset-view svg {
+  filter: invert(1);
+}
+
+.maplibregl-ctrl-reset-view svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+/* Flat full-text attribution, docked to the bottom edge between the
+   legend pill (left) and the Reportar FAB (right). Hidden on mobile,
+   where the bottom strip has no room for it. */
 .maplibregl-ctrl-bottom-left {
-  margin-left: calc(8px + env(safe-area-inset-left));
-  margin-bottom: calc(4px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  margin-bottom: calc(2px + env(safe-area-inset-bottom));
+  padding-inline: 12px;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .maplibregl-ctrl-bottom-left {
+    padding-inline: 190px;
+  }
+}
+
+@media (max-width: 767px) {
+  .maplibregl-ctrl-bottom-left {
+    display: none;
+  }
 }
 
 .maplibregl-ctrl-attrib {
+  max-width: 100%;
+  overflow: hidden;
   font-family: var(--font-sans);
   font-size: 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--card) 82%, transparent);
-  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0 6px;
+  pointer-events: auto;
 }
 
 .maplibregl-ctrl-attrib a {

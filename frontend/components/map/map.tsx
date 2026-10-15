@@ -6,7 +6,6 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTheme } from '@/components/theme-provider';
 import {
   X,
-  CircleAlert,
   Crosshair,
   Info,
 } from 'lucide-react';
@@ -53,6 +52,104 @@ function prefersReducedMotion(): boolean {
 const countFormat = new Intl.NumberFormat('pt-BR');
 function formatCount(value: number): string {
   return countFormat.format(value);
+}
+
+// Initial camera — the reset-view control restores exactly this.
+const DEFAULT_CENTER: [number, number] = [-51.065, 0.035];
+const DEFAULT_ZOOM = 13;
+
+// External snapshots read after hydration (never during render on the
+// server) so SSR and the first client render always agree. `useState`
+// initializers and mount effects that read window/localStorage caused
+// hydration mismatches whenever saved values differed from the defaults.
+function subscribeNoop(): () => void {
+  return () => {};
+}
+
+function getStoredBasemap(): BasemapId {
+  try {
+    const raw = window.localStorage.getItem('urbaly-basemap');
+    return raw === 'bright' || raw === 'liberty' || raw === 'dark' || raw === 'fiord'
+      ? raw
+      : 'google';
+  } catch {
+    return 'google';
+  }
+}
+
+function getUrlQuery(): string {
+  try {
+    return new URLSearchParams(window.location.search).get('q') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function getUrlCategory(): ReportCategory | 'all' {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('categoria');
+    return raw && (CATEGORY_ORDER as string[]).includes(raw) ? (raw as ReportCategory) : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+// Reset-view glyph: the lucide "compass" icon (same library as every other
+// app icon), inlined as a string because native MapLibre controls are plain
+// DOM. Note MapLibre forces its own sprite span to width/height:100% (its
+// selector beats our 18px override), so the Find-my-location glyph actually
+// renders ~26px ink in the 44px button — hence 28px here for equal ink.
+// The needle polygon keeps pointing north via rotate(-45 - bearing): the
+// lucide needle nominally points north-east (45°), so -45° centers it and
+// -bearing counters map rotation.
+const RESET_VIEW_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon class="reset-view-needle" points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor" stroke="none"/></svg>`;
+
+/**
+ * Native MapLibre control that stacks under Find-my-location in the
+ * bottom-right group (inheriting its exact look) and resets bearing, pitch,
+ * center, and zoom. Always active — no disabled state.
+ */
+class ResetViewControl implements maplibregl.IControl {
+  private container: HTMLElement | null = null;
+  private map: maplibregl.Map | null = null;
+
+  constructor(private readonly onReset: () => void) {}
+
+  onAdd(map: maplibregl.Map): HTMLElement {
+    this.map = map;
+    const container = document.createElement('div');
+    // Same classes as the stock controls (geolocate, zoom): this is what
+    // gives the button its sizing, corner margins, and click-through.
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group maplibregl-ctrl-reset-view';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.title = 'Redefinir vista do mapa';
+    button.setAttribute('aria-label', 'Redefinir vista do mapa (norte para cima, zoom inicial)');
+    button.innerHTML = RESET_VIEW_SVG;
+    button.addEventListener('click', this.handleClick);
+    container.appendChild(button);
+    this.container = container;
+    map.on('rotate', this.syncNeedle);
+    this.syncNeedle();
+    return container;
+  }
+
+  onRemove(map: maplibregl.Map): void {
+    map.off('rotate', this.syncNeedle);
+    this.container?.querySelector('button')?.removeEventListener('click', this.handleClick);
+    this.container = null;
+    this.map = null;
+  }
+
+  private handleClick = () => {
+    this.onReset();
+  };
+
+  private syncNeedle = () => {
+    const needle = this.container?.querySelector('.reset-view-needle');
+    const bearing = this.map?.getBearing() ?? 0;
+    needle?.setAttribute('transform', `rotate(${-45 - bearing} 12 12)`);
+  };
 }
 
 export default function Map() {
@@ -193,17 +290,23 @@ export default function Map() {
     };
   }, [isMapLoading, mapError]);
 
-  // Search and filter state (Google Maps-style pills). Initialized from the
-  // URL so result sets survive reload, back, and sharing.
-  const [searchQuery, setSearchQuery] = React.useState(() => {
-    if (typeof window === 'undefined') return '';
-    return new URLSearchParams(window.location.search).get('q') ?? '';
-  });
-  const [selectedCategory, setSelectedCategory] = React.useState<ReportCategory | 'all'>(() => {
-    if (typeof window === 'undefined') return 'all';
-    const raw = new URLSearchParams(window.location.search).get('categoria');
-    return raw && (CATEGORY_ORDER as string[]).includes(raw) ? (raw as ReportCategory) : 'all';
-  });
+  // Search and filter state (Google Maps-style pills). Persisted URL values
+  // come from a hydration-safe external store; keystrokes live in drafts.
+  const persistedQuery = React.useSyncExternalStore(subscribeNoop, getUrlQuery, () => '');
+  const persistedCategory = React.useSyncExternalStore(
+    subscribeNoop,
+    getUrlCategory,
+    () => 'all' as ReportCategory | 'all'
+  );
+  const [queryDraft, setQueryDraft] = React.useState<string | null>(null);
+  const [categoryDraft, setCategoryDraft] = React.useState<ReportCategory | 'all' | null>(null);
+  const searchQuery = queryDraft ?? persistedQuery;
+  const selectedCategory = categoryDraft ?? persistedCategory;
+  const setSearchQuery = React.useCallback((value: string) => setQueryDraft(value), []);
+  const setSelectedCategory = React.useCallback(
+    (value: ReportCategory | 'all') => setCategoryDraft(value),
+    []
+  );
 
   // Keep the query + filters in the URL (shareable, back-button safe).
   React.useEffect(() => {
@@ -263,22 +366,20 @@ export default function Map() {
   // choice is clamped to the current theme's options so a light-only pick
   // (e.g. Liberty) degrades to Padrão in dark mode and restores on return.
   const basemapOptions = isDark ? DARK_BASEMAPS : LIGHT_BASEMAPS;
-  const [basemap, setBasemap] = React.useState<BasemapId>(() => {
-    if (typeof window === 'undefined') return 'google';
-    try {
-      const raw = window.localStorage.getItem('urbaly-basemap');
-      return raw === 'bright' || raw === 'liberty' || raw === 'dark' || raw === 'fiord'
-        ? raw
-        : 'google';
-    } catch {
-      return 'google';
-    }
-  });
+  // Stored preference comes from a hydration-safe external store; picks
+  // made this session live in a draft (persisted alongside).
+  const persistedBasemap = React.useSyncExternalStore(
+    subscribeNoop,
+    getStoredBasemap,
+    () => 'google' as BasemapId
+  );
+  const [basemapDraft, setBasemapDraft] = React.useState<BasemapId | null>(null);
+  const basemap = basemapDraft ?? persistedBasemap;
   const effectiveBasemap = basemapOptions.some((option) => option.id === basemap)
     ? basemap
     : 'google';
   const handleBasemapChange = React.useCallback((next: BasemapId) => {
-    setBasemap(next);
+    setBasemapDraft(next);
     try {
       window.localStorage.setItem('urbaly-basemap', next);
     } catch {
@@ -292,6 +393,28 @@ export default function Map() {
   // CARTO fallback style (server logs the warning once).
   const publicConfig = usePublicConfig();
   const cartoApiKey = publicConfig?.cartoApiKey ?? '';
+
+  // Reset-view state: restores north-up, pitch, center, and zoom.
+  // The control is always active — no disabled state.
+  const handleResetView = React.useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      if (prefersReducedMotion()) {
+        map.jumpTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, bearing: 0, pitch: 0 });
+      } else {
+        map.easeTo({
+          center: DEFAULT_CENTER,
+          zoom: DEFAULT_ZOOM,
+          bearing: 0,
+          pitch: 0,
+          duration: 600,
+        });
+      }
+    } catch {
+      // Reset is a nicety; never break the map if the camera call fails.
+    }
+  }, []);
 
   // Initialize MapLibre (once per retry; theme switches go through setStyle below).
   React.useEffect(() => {
@@ -360,8 +483,8 @@ export default function Map() {
           }
           return { url };
         },
-        center: [-51.065, 0.035],
-        zoom: 13,
+        center: [...DEFAULT_CENTER] as [number, number],
+        zoom: DEFAULT_ZOOM,
         maxZoom: 18,
         minZoom: 9,
       });
@@ -516,6 +639,8 @@ export default function Map() {
       );
     });
     map.addControl(geolocateControl, 'bottom-right');
+    // Reset view stacks natively under Find-my-location.
+    map.addControl(new ResetViewControl(handleResetView), 'bottom-right');
 
     return () => {
       cancelled = true;
@@ -928,20 +1053,26 @@ export default function Map() {
             </div>
           )}
 
-          {/* Basemap style switcher — above the legend pill */}
-          <div className="absolute bottom-[calc(3.9rem+env(safe-area-inset-bottom))] left-3 z-10 md:left-4">
+          {/* Bottom-left column anchored at the bottom edge: Layers button
+              above the report-count legend with a structural gap */}
+          <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-col items-start gap-3 md:left-4">
             <MapBasemapButton
               options={basemapOptions}
               value={effectiveBasemap}
               onChange={handleBasemapChange}
             />
-          </div>
 
-          {/* Bottom Legend — count only; pins are stable across zoom */}
-          <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 font-sans text-[11px] backdrop-blur-md md:left-4 dark:bg-zinc-900/90">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="font-sans font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
-              <span className="leading-tight">no mapa</span>
+            {/* Report count legend with label */}
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label={`${formatCount(filteredReports.length)} ${filteredReports.length === 1 ? 'reporte' : 'reportes'} no mapa`}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 font-sans text-[11px] backdrop-blur-md dark:bg-zinc-900/90"
+            >
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="font-sans font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
+                <span className="leading-tight">{filteredReports.length === 1 ? 'reporte no mapa' : 'reportes no mapa'}</span>
+              </div>
             </div>
           </div>
 
@@ -1029,7 +1160,7 @@ export default function Map() {
             aria-describedby={!jwt && !isPlacementMode ? 'report-fab-auth-hint' : undefined}
             title={!jwt && !isPlacementMode ? 'Entre com sua conta Google para publicar' : undefined}
             className={cn(
-              'absolute bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 flex h-12 cursor-pointer touch-manipulation items-center gap-2 rounded-full border border-transparent px-5 font-sans text-sm font-semibold outline-none transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring md:bottom-8 md:right-4',
+              'absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 flex h-12 cursor-pointer touch-manipulation items-center gap-2 rounded-full border border-transparent px-5 font-sans text-sm font-semibold outline-none transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring md:bottom-3 md:right-4',
               selectedReport &&
               'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
               // The right-docked form card owns the FAB corner on every
@@ -1046,10 +1177,7 @@ export default function Map() {
                 Cancelar
               </>
             ) : (
-              <>
-                <CircleAlert className="report-action-icon size-4" aria-hidden="true" />
-                Reportar
-              </>
+              <>Reportar</>
             )}
           </button>
           {!jwt && !isPlacementMode && (

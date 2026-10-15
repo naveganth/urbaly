@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BarChart3,
+  Building2,
   Check,
   Home,
   Info,
@@ -17,6 +18,7 @@ import {
   Sun,
   Trophy,
   User,
+  Waves,
   X,
 } from 'lucide-react';
 import {
@@ -205,6 +207,16 @@ export function MapNavDrawer({
 /* Basemap style switcher — floating Layers button + style picker       */
 /* ------------------------------------------------------------------ */
 
+type BasemapThemeIcon = React.ComponentType<{ className?: string }>;
+
+const BASEMAP_THEME_ICONS: Record<BasemapId, BasemapThemeIcon> = {
+  google: MapIcon,
+  bright: Sun,
+  liberty: Building2,
+  dark: Moon,
+  fiord: Waves,
+};
+
 export function MapBasemapButton({
   options,
   value,
@@ -221,9 +233,12 @@ export function MapBasemapButton({
       <DropdownMenuTrigger
         aria-label={`Estilo do mapa: ${active.label}. Trocar estilo do mapa`}
         title={`Estilo do mapa: ${active.label}`}
-        className="flex size-11 cursor-pointer touch-manipulation items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground backdrop-blur-md transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted dark:bg-zinc-900/95"
+        className="flex size-11 cursor-pointer touch-manipulation items-center justify-center rounded-full border border-border bg-card text-[#333] transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted dark:[&_svg]:invert"
       >
-        <Layers className="size-5" />
+        {/* Lucide "layers": same library as the rest of the app, sized to
+            the actually-rendered Find-my-location ink (~26px, see map.tsx),
+            same #333 sprite color (inverted in dark, like the native icon). */}
+        <Layers className="size-7" strokeWidth={3} />
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
@@ -239,6 +254,7 @@ export function MapBasemapButton({
 
         {options.map((option) => {
           const isSelected = option.id === value;
+          const OptionIcon = BASEMAP_THEME_ICONS[option.id] ?? MapIcon;
           return (
             <DropdownMenuItem
               key={option.id}
@@ -248,6 +264,9 @@ export function MapBasemapButton({
                 isSelected && 'bg-accent/60'
               )}
             >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <OptionIcon className="size-4" />
+              </span>
               <span className="min-w-0 flex-1">
                 <span
                   className="block truncate text-[13px] font-medium tracking-[-0.01em]"
