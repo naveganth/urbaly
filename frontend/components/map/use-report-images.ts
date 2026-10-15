@@ -44,6 +44,13 @@ function preloadImage(src: string, timeoutMs: number): Promise<void> {
       finish();
     };
     img.decoding = 'async';
+    try {
+      (img as HTMLImageElement & { fetchPriority?: string }).fetchPriority = 'high';
+    } catch {
+      // Older browsers ignore fetchPriority — safe to skip.
+    }
+    // Match the marker <img> referrer policy so warm cache entries are reused.
+    img.referrerPolicy = 'no-referrer-when-downgrade';
     img.src = src;
   });
 }

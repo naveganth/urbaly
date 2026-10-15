@@ -1,7 +1,6 @@
 'use client';
 
 import { createGooglePinElement } from './google-pin';
-import { createReportPhotoElement } from './report-photo-pin';
 import type { ReportCategory, ReportStatus } from './types';
 
 export interface AdaptiveMarkerData {
@@ -22,11 +21,8 @@ export interface AdaptiveMarkerData {
 export interface AdaptiveMarkerHandle {
   element: HTMLDivElement;
   /**
-   * Seamlessly swap between teardrop pin and circular photo preview.
-   * Pure class toggle + img src assignment — never rebuilds the marker, so
-   * zooming in/out crossfades in place with no pop or remount.
-   * `thumbnailPending` shows the shimmer skeleton while a thumbnail is being
-   * fetched but no `imageUrl` is known yet.
+   * Kept for API compat — pins are stable across zoom, so this is a no-op
+   * that only guarantees the pin layer stays visible.
    */
   setPhotoMode(show: boolean, imageUrl?: string, imageCount?: number, thumbnailPending?: boolean): void;
   /** Lift + ring highlight for the currently selected report. */
@@ -34,21 +30,18 @@ export interface AdaptiveMarkerHandle {
 }
 
 /**
- * Single marker element holding BOTH the teardrop pin and the circular CDN
- * photo preview as stacked layers. Visibility is driven by the `.is-photo`
- * class (see globals.css crossfade, SmoothUI 250ms EASE_OUT). Thumbnails that
- * arrive after mount (zoom prefetch) fade in via `.is-loaded` on decode.
+ * Single stable teardrop-pin marker element.
+ *
+ * Previously this held both the pin and a circular photo preview as stacked
+ * layers swapped by zoom level — that crossfade is what made markers appear
+ * to vanish/re-appear on every zoom-threshold crossing. Pins now stay
+ * constant: one pin layer, no zoom listener, no swap, always in the map.
  */
 export function createAdaptiveMarkerElement(data: AdaptiveMarkerData): AdaptiveMarkerHandle {
   const {
     category,
     categoryLabel,
     title,
-    address,
-    status,
-    upvotes,
-    imageUrl,
-    imageCount = 0,
     isDark,
     delayMs = 0,
     animateIn = true,
@@ -76,78 +69,12 @@ export function createAdaptiveMarkerElement(data: AdaptiveMarkerData): AdaptiveM
     createGooglePinElement({ category, isDark, delayMs, animateIn })
   );
 
-  const photoLayer = document.createElement('div');
-  photoLayer.className = 'marker-photo-layer';
-  photoLayer.appendChild(
-    createReportPhotoElement({
-      category,
-      categoryLabel,
-      title,
-      address,
-      status,
-      upvotes,
-      imageUrl: imageUrl ?? '',
-      imageCount,
-      isDark,
-      animateIn: false,
-    })
-  );
-
   container.appendChild(pinLayer);
-  container.appendChild(photoLayer);
 
-  // Reveal each photo <img> (circle + tooltip thumb) the moment it decodes,
-  // fading over the category-icon fallback disc. Capture phase catches the
-  // non-bubbling `load` events of current and future imgs alike.
-  container.addEventListener(
-    'load',
-    (event) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.tagName === 'IMG' && target.classList.contains('js-photo-img')) {
-        target.classList.add('is-loaded');
-      }
-    },
-    true
-  );
-
-  let currentSrc = imageUrl ?? '';
-
-  const setPhotoMode = (
-    show: boolean,
-    nextSrc?: string,
-    nextCount?: number,
-    thumbnailPending?: boolean
-  ): void => {
-    container.classList.toggle('is-photo', show);
-
-    if (nextSrc && nextSrc !== currentSrc) {
-      currentSrc = nextSrc;
-      container.querySelectorAll<HTMLImageElement>('img.js-photo-img').forEach((img) => {
-        img.classList.remove('is-loaded');
-        img.setAttribute('src', nextSrc);
-      });
-    }
-
-    // Skeleton shimmer only while photo mode is on and we are still waiting
-    // for a thumbnail URL. Once a src exists, the sibling-selector CSS takes
-    // over (shimmer until decode); with no image expected, the fallback disc
-    // shows instead.
-    container.classList.toggle('is-loading', show && !currentSrc && !!thumbnailPending);
-
-    if (typeof nextCount === 'number') {
-      const badge = container.querySelector<HTMLElement>('.js-photo-count');
-      if (badge) {
-        const extra = nextCount - 1;
-        if (extra > 0) {
-          badge.textContent = `+${extra}`;
-          badge.classList.remove('hidden');
-          badge.classList.add('flex', 'h-5', 'min-w-5');
-        } else {
-          badge.classList.add('hidden');
-          badge.classList.remove('flex', 'h-5', 'min-w-5');
-        }
-      }
-    }
+  const setPhotoMode = (): void => {
+    // No-op: pins never enter photo mode. Ensure the class stays off so the
+    // pin layer can never be hidden by a stale zoom state.
+    container.classList.remove('is-photo', 'is-loading');
   };
 
   const setSelected = (selected: boolean): void => {

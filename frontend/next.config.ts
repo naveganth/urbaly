@@ -10,7 +10,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    optimizePackageImports: ["@chakra-ui/react"],
+    optimizePackageImports: ["lucide-react", "motion"],
   },
   allowedDevOrigins: ['192.168.100.69'],
   async rewrites() {

@@ -62,6 +62,7 @@ async function executeRawRequest(
         {
           method,
           headers: {
+            Accept: 'application/json',
             'Content-Type': 'application/json',
             ...authHeaders,
             ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
@@ -83,6 +84,14 @@ async function executeRawRequest(
         }
       );
 
+      // GET-with-body endpoints (/reportes/quadro, /reporte/imagens) hang
+      // without a timeout and leave marker thumbnails shimmering forever.
+      req.setTimeout(10000, () => {
+        req.destroy(new Error('Tempo esgotado ao contatar o servidor.'));
+      });
+      req.on('timeout', () => {
+        resolve({ status: 500, ok: false, data: 'Tempo esgotado ao contatar o servidor.' });
+      });
       req.on('error', (error) => resolve({ status: 500, ok: false, data: error.message }));
       if (payload) req.write(payload);
       req.end();
@@ -199,7 +208,15 @@ function normalizeImageUrl(source: string): string {
   ) {
     return `data:image/jpeg;base64,${trimmed}`;
   }
-  return `${REPORT_IMAGE_CDN}/${encodeURIComponent(trimmed)}`;
+  // Preserve path separators: foto_nome may contain subfolders
+  // (e.g. "reports/123/photo.jpg"). encodeURIComponent would turn `/`
+  // into %2F and break the CDN path, so encode per segment.
+  const withoutLeadingSlash = trimmed.replace(/^\/+/, '');
+  const encodedPath = withoutLeadingSlash
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  return `${REPORT_IMAGE_CDN}/${encodedPath}`;
 }
 
 export async function getMapReports(): Promise<ApiMapReport[]> {
@@ -225,10 +242,23 @@ export async function getReportImages(id: number | string): Promise<string[]> {
   const numericId = typeof id === 'number' ? id : parseInt(id, 10);
   if (isNaN(numericId)) return [];
 
-  const response = await sendRawRequest('/reporte/imagens', 'GET', { id: numericId });
-  if (!response.ok || !response.data) {
-    return [];
+  let response = await sendRawRequest('/reporte/imagens', 'GET', { id: numericId });
+  if (!response.ok) {
+    // Some proxies strip GET bodies: retry as POST before giving up so
+    // markers don't settle on the fallback disc for a transport reason.
+    const retry = await sendRawRequest('/reporte/imagens', 'POST', { id: numericId });
+    if (retry.ok) response = retry;
   }
+  if (!response.ok) {
+    // Transport failure (distinct from "no images"): throw so callers can
+    // retry instead of permanently marking the report as imageless.
+    throw new Error(
+      typeof response.data === 'string' && response.data.trim().length > 0
+        ? response.data
+        : 'Não foi possível carregar as imagens do reporte.'
+    );
+  }
+  if (response.data === undefined || response.data === null) return [];
 
   const data = response.data;
 
@@ -401,56 +431,4 @@ export async function deleteMapReport(id: number | string, jwt?: string) {
     };
   }
   return response;
-}
-
-export async function testPing() {
-  return sendRawRequest('/ping', 'GET');
-}
-
-export async function testQuadroReportes() {
-  return sendRawRequest('/reportes/quadro', 'GET', MACAPA_BOUNDS);
-}
-
-export async function testRaioReportes() {
-  return sendRawRequest('/reportes/raio', 'GET', MACAPA_BOUNDS);
-}
-
-export async function testRaioPonteiros() {
-  return sendRawRequest('/ponteiros/raio', 'GET', {
-    lon: -53.0,
-    lat: 2.1,
-    raio: 10000,
-  });
-}
-
-export async function testQuadroPonteiros() {
-  return sendRawRequest('/ponteiros/quadro', 'GET', MACAPA_BOUNDS);
-}
-
-export async function testBuscarReporte() {
-  return sendRawRequest('/reporte', 'GET', [52209]);
-}
-
-export async function testCriarReporte() {
-  return sendRawRequest('/reporte', 'POST', {
-    titulo: 'teste API Next.js',
-    categoria: 0,
-    lon: -52.0,
-    lat: 0.0,
-    foto_data: [
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-    ],
-  });
-}
-
-export async function testAtualizarReporte() {
-  return sendRawRequest('/reporte', 'PUT', {
-    id: 52196,
-    descricao: 'Atualizado via Next.js',
-    titulo: 'Novo Titulo Next.js',
-  });
-}
-
-export async function testDeletarReporte() {
-  return deleteMapReport(52196);
 }

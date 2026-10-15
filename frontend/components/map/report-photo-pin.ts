@@ -96,9 +96,12 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
           <div class="absolute inset-0 flex items-center justify-center" style="background: ${ringColor}22;">
             <div style="transform: scale(1.8); display: flex;">${fallbackIcon}</div>
           </div>
-          <img ${srcAttr} alt="Foto da ocorrência ${safeTitle}" loading="lazy" decoding="async" referrerpolicy="no-referrer"
-            onerror="this.remove()" class="js-photo-img marker-photo-img absolute inset-0 h-full w-full object-cover" draggable="false" />
-          <div class="js-photo-shimmer marker-photo-shimmer pointer-events-none absolute inset-0" aria-hidden="true"></div>
+          <img ${srcAttr} alt="Foto da ocorrência ${safeTitle}" loading="eager" fetchpriority="high" decoding="async" referrerpolicy="no-referrer-when-downgrade"
+            onerror="this.classList.add('is-error');this.removeAttribute('src')" class="js-photo-img marker-photo-img absolute inset-0 h-full w-full object-cover" draggable="false" />
+          <div class="js-photo-shimmer marker-photo-shimmer pointer-events-none absolute inset-0 rounded-full" aria-hidden="true"></div>
+          <div class="js-photo-loader marker-photo-loader pointer-events-none absolute inset-0 flex items-center justify-center rounded-full" aria-hidden="true">
+            <span class="marker-photo-spinner"></span>
+          </div>
         </div>
       </div>
       <span class="absolute -bottom-0.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 border-r border-b"
@@ -111,8 +114,11 @@ export function createReportPhotoElement(data: ReportPhotoPinData): HTMLDivEleme
       <div class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl">
         <div class="flex items-center gap-2.5 border-b border-border/60 bg-muted/40 p-2.5">
           <span class="relative block h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
-            <img ${srcAttr} alt="" aria-hidden="true" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" class="js-photo-img marker-photo-img absolute inset-0 h-full w-full object-cover" draggable="false" />
+            <img ${srcAttr} alt="" aria-hidden="true" loading="lazy" decoding="async" referrerpolicy="no-referrer-when-downgrade" onerror="this.classList.add('is-error');this.removeAttribute('src')" class="js-photo-img marker-photo-img absolute inset-0 h-full w-full object-cover" draggable="false" />
             <span class="js-photo-shimmer marker-photo-shimmer pointer-events-none absolute inset-0" aria-hidden="true"></span>
+            <span class="js-photo-loader marker-photo-loader pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+              <span class="marker-photo-spinner marker-photo-spinner--sm"></span>
+            </span>
           </span>
           <span class="min-w-0 flex-1">
             <span class="block truncate text-xs font-semibold leading-tight text-foreground">${safeTitle}</span>

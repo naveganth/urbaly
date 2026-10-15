@@ -10,16 +10,16 @@ export interface MapMarkerPointer {
   coordinates: [number, number];
   category: ReportCategory;
   title: string;
-  /** First CDN image of the report, when available. */
+  /** Kept for API compat — pins stay constant, photo previews are disabled. */
   imageUrl?: string;
   imageCount?: number;
   categoryLabel?: string;
   address?: string;
   status?: ReportStatus;
   upvotes?: number;
-  /** When true (map very zoomed in) morph to the circular photo preview. */
+  /** Kept for API compat — always rendered as pin, never photo. */
   showPhoto?: boolean;
-  /** A CDN thumbnail is being fetched but no URL is known yet — show skeleton. */
+  /** Kept for API compat — unused, pins never show a skeleton. */
   thumbPending?: boolean;
 }
 
@@ -35,14 +35,22 @@ interface MapMarkerProps {
 
 /**
  * Dedicated React Map Marker component.
- * Attaches one adaptive marker (teardrop pin + circular photo preview as
- * stacked layers) to the MapLibre map instance and handles reactive updates
- * and clean unmounting when mapping over coordinates in React state.
+ * Attaches one stable teardrop pin to the MapLibre map instance and handles
+ * reactive updates and clean unmounting when mapping over coordinates in
+ * React state.
  *
- * Zoom swaps and late-arriving thumbnails update the SAME element in place
- * via `setPhotoMode` (CSS crossfade) — the marker is never rebuilt, so there
- * is no pop, flicker, or replayed entrance animation.
+ * Pins never depend on zoom or viewport: the same element stays mounted for
+ * the life of the report, so panning/zooming never hides, swaps, or replays
+ * markers. The drop-in entrance plays exactly once per report id per session
+ * (tracked in `animatedMarkerIds`) — any later remount (theme switch, map
+ * retry, filter change) paints the pin instantly instead of replaying the
+ * staggered animation, so markers are simply shown with no reappearing.
  */
+
+// Report ids that already played their entrance animation this session.
+// Later remounts render instantly (no stagger replay after pan/zoom/filter).
+const animatedMarkerIds = new Set<string>();
+
 export const MapMarker = React.memo(function MapMarker({
   map,
   pointer,
@@ -55,10 +63,17 @@ export const MapMarker = React.memo(function MapMarker({
   const markerRef = React.useRef<maplibregl.Marker | null>(null);
   const handleRef = React.useRef<AdaptiveMarkerHandle | null>(null);
 
-  // Build once per map / position / category / theme. Zoom state and image
-  // arrivals flow through the toggle effect below — never a rebuild.
+  // Build once per map / position / category / theme. The pin is static
+  // afterwards — no zoom/viewport-driven updates, never a rebuild for
+  // pan or zoom. The entrance animation runs only the first time a report
+  // id mounts; remounts paint instantly so markers just stay shown.
   React.useEffect(() => {
     if (!map) return;
+
+    const shouldAnimate = animateIn && !animatedMarkerIds.has(pointer.id);
+    animatedMarkerIds.add(pointer.id);
+    // Bound the session set so long-lived sessions never grow it without limit.
+    if (animatedMarkerIds.size > 2000) animatedMarkerIds.clear();
 
     const handle = createAdaptiveMarkerElement({
       category: pointer.category,
@@ -67,19 +82,13 @@ export const MapMarker = React.memo(function MapMarker({
       address: pointer.address ?? '',
       status: pointer.status ?? 'open',
       upvotes: pointer.upvotes ?? 0,
-      imageUrl: pointer.imageUrl,
-      imageCount: pointer.imageCount ?? 0,
+      imageUrl: undefined,
+      imageCount: 0,
       isDark,
-      delayMs,
-      animateIn,
+      delayMs: shouldAnimate ? delayMs : 0,
+      animateIn: shouldAnimate,
       isSelected,
     });
-    handle.setPhotoMode(
-      Boolean(pointer.showPhoto),
-      pointer.imageUrl,
-      pointer.imageCount,
-      pointer.thumbPending
-    );
 
     const el = handle.element;
 
@@ -118,18 +127,6 @@ export const MapMarker = React.memo(function MapMarker({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, pointer.coordinates[0], pointer.coordinates[1], pointer.category, isDark]);
-
-  // Seamless in-place update: zoom threshold crossings, prefetched
-  // thumbnails, and thumbnail loading state crossfade on the existing
-  // element — no remount, no pop.
-  React.useEffect(() => {
-    handleRef.current?.setPhotoMode(
-      Boolean(pointer.showPhoto),
-      pointer.imageUrl,
-      pointer.imageCount,
-      pointer.thumbPending
-    );
-  }, [pointer.showPhoto, pointer.imageUrl, pointer.imageCount, pointer.thumbPending]);
 
   React.useEffect(() => {
     handleRef.current?.setSelected(isSelected);

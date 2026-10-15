@@ -1,7 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Send } from "lucide-react"
-import { SiInstagram, SiX, SiYoutube } from "react-icons/si"
+import { InstagramIcon, XIcon, YoutubeIcon } from "@/components/brand-icons"
 import { Button } from "@/components/ui/shadcn/button"
 import { Input } from "@/components/ui/shadcn/input"
 
@@ -13,9 +13,9 @@ const MENU_LINKS = [
 ]
 
 const SOCIAL_LINKS = [
-  { label: "Instagram", href: "#", icon: SiInstagram },
-  { label: "X", href: "#", icon: SiX },
-  { label: "YouTube", href: "#", icon: SiYoutube },
+  { label: "Instagram", href: "#", icon: InstagramIcon },
+  { label: "X", href: "#", icon: XIcon },
+  { label: "YouTube", href: "#", icon: YoutubeIcon },
 ]
 
 export function Footer() {

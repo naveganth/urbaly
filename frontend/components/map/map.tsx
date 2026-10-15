@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import { createMapReport, getMapReports, getReportImages } from '@/app/actions/api';
+import { createMapReport, getMapReports } from '@/app/actions/api';
 import { useAuth } from '@/lib/auth-context';
 import { AnimatePresence } from 'motion/react';
 import { INITIAL_REPORTS } from '@/data/mock-reports';
@@ -30,8 +30,6 @@ import { ReportProblemSheet } from './report-problem-sheet';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
   useGatedReportImages,
-  peekCachedReportImages,
-  storeCachedReportImages,
 } from './use-report-images';
 import { MapMarker } from './map-marker';
 import { createPlacementMarkerElement } from './placement-pin';
@@ -41,31 +39,6 @@ import { usePublicConfig } from '@/lib/public-config';
 function getCartoVectorStyle(isDark: boolean, apiKey: string) {
   const base = getCartoBaseStyleUrl(isDark);
   return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
-}
-
-// Zoom band with hysteresis: photo previews engage at >= 15 but only
-// disengage below 14.6, so hovering around the threshold never flickers
-// the markers back and forth.
-const PHOTO_ZOOM_ENTER = 15;
-const PHOTO_ZOOM_EXIT = 14.6;
-
-// Thumbnail resolution order: inline listing image -> zoom-prefetched
-// CDN thumb -> shared cache (fed by prefetch or a previous selection).
-function getReportThumb(
-  report: StreetReport,
-  photoThumbs: Record<string, string>
-): string | undefined {
-  return (
-    report.images?.[0] ??
-    report.imageUrl ??
-    photoThumbs[report.id] ??
-    peekCachedReportImages(report.id)?.[0]
-  );
-}
-
-function isFetchableReportId(id: string): boolean {
-  const numericId = parseInt(id, 10);
-  return !isNaN(numericId) && numericId > 0;
 }
 
 function prefersReducedMotion(): boolean {
@@ -84,7 +57,14 @@ function formatCount(value: number): string {
 export default function Map() {
   const { resolvedTheme } = useTheme();
   const { jwt, user } = useAuth();
-  const [hasMounted, setHasMounted] = React.useState(false);
+  // Hydration gate for browser-only map work. useSyncExternalStore returns
+  // false during SSR/prerender and true after hydration — no effect needed
+  // (avoids react-hooks/set-state-in-effect).
+  const hasMounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const isDark = hasMounted && resolvedTheme === 'dark';
 
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
@@ -94,20 +74,6 @@ export default function Map() {
 
   // Reactive Map instance state to trigger React child components (MapMarker)
   const [mapInstance, setMapInstance] = React.useState<maplibregl.Map | null>(null);
-  // Current zoom level: pins swap to circular CDN photo previews when very zoomed in.
-  const [showPhotoPins, setShowPhotoPins] = React.useState(false);
-  // First-image thumbnails fetched on demand for reports whose listing carries
-  // no inline photos (the /quadro endpoint often omits foto payloads).
-  const [photoThumbs, setPhotoThumbs] = React.useState<Record<string, string>>({});
-  // Reports confirmed to have no fetchable image — pins settle on the
-  // fallback disc instead of shimmering forever.
-  const [thumbFailed, setThumbFailed] = React.useState<Record<string, true>>({});
-  const thumbFetchInFlightRef = React.useRef<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    // This state gates browser-only map work until hydration completes.
-    setHasMounted(true);
-  }, []);
 
   // React state array for reports / marker coordinates
   const [reports, setReports] = React.useState<StreetReport[]>([]);
@@ -116,11 +82,11 @@ export default function Map() {
   const [isOffline, setIsOffline] = React.useState(false);
   const [mapRetryKey, setMapRetryKey] = React.useState(0);
 
-  // Fetch reports from API using Server Action
+  // Fetch reports from API using Server Action.
+  // Initial state is already loading=true/error=null, and retries reset via
+  // handleRetryMap — state updates here happen only in async callbacks.
   React.useEffect(() => {
     let cancelled = false;
-    setIsReportsLoading(true);
-    setReportsError(null);
 
     getMapReports()
       .then((apiReports) => {
@@ -135,7 +101,13 @@ export default function Map() {
               coordinates: report.ponto,
               address: `Localização: ${report.ponto[1].toFixed(4)}, ${report.ponto[0].toFixed(4)}`,
               images: report.foto_nome
-                ? [`${REPORT_IMAGE_CDN}/${encodeURIComponent(report.foto_nome)}`]
+                ? [
+                    `${REPORT_IMAGE_CDN}/${report.foto_nome
+                      .replace(/^\/+/, '')
+                      .split('/')
+                      .map((segment) => encodeURIComponent(segment))
+                      .join('/')}`,
+                  ]
                 : report.foto_data?.map((image) => `data:image/webp;base64,${image}`) ?? [],
               createdAt: report.data_criacao,
               updatedAt: report.data_atualizacao,
@@ -188,6 +160,15 @@ export default function Map() {
   const isDetailsLoading = selectedReport !== null && !isDetailsReady;
   const [isMapLoading, setIsMapLoading] = React.useState(true);
   const [mapError, setMapError] = React.useState<string | null>(null);
+  // Retry resets loading/error in the event handler (not in the effect body)
+  // so the fetch effect above never calls setState synchronously.
+  const handleRetryMap = React.useCallback(() => {
+    setIsReportsLoading(true);
+    setReportsError(null);
+    setMapError(null);
+    setIsMapLoading(true);
+    setMapRetryKey((value) => value + 1);
+  }, []);
   // Delayed loader (avoids flash on fast boots) + slow-network hint.
   const [showMapLoader, setShowMapLoader] = React.useState(false);
   const [slowMap, setSlowMap] = React.useState(false);
@@ -252,31 +233,10 @@ export default function Map() {
   const hasActiveFilters =
     selectedCategory !== 'all' || searchQuery.trim().length > 0;
 
-  // Current viewport bounds — drives marker virtualization so hundreds of
-  // reports never mount hundreds of MapLibre markers at once.
-  const [mapBounds, setMapBounds] = React.useState<{
-    south: number;
-    north: number;
-    west: number;
-    east: number;
-  } | null>(null);
-
-  // Visible markers: filtered reports inside the viewport, capped so the DOM
-  // stays cheap. The legend still counts all filtered reports.
-  const visibleReports = React.useMemo(() => {
-    const inView = !mapBounds
-      ? filteredReports
-      : filteredReports.filter((report) => {
-          const [lng, lat] = report.coordinates;
-          return (
-            lat >= mapBounds.south &&
-            lat <= mapBounds.north &&
-            lng >= mapBounds.west &&
-            lng <= mapBounds.east
-          );
-        });
-    return inView.length > 250 ? inView.slice(0, 250) : inView;
-  }, [filteredReports, mapBounds]);
+  // All filtered reports mount markers — including off-viewport ones — so
+  // panning never pops pins in late and the pins always match the legend
+  // count. (Viewport virtualization was intentionally removed.)
+  const markerReports = filteredReports;
 
   // Per-category occurrence counts for the filter rows.
   const categoryCounts = React.useMemo(() => {
@@ -289,83 +249,6 @@ export default function Map() {
     }
     return counts;
   }, [reports]);
-
-  // True while any visible photo pin is still waiting on its CDN thumbnail —
-  // drives the skeleton shimmer on markers and the legend loading hint.
-  const thumbsLoading =
-    showPhotoPins &&
-    filteredReports.some((report) => {
-      if (getReportThumb(report, photoThumbs)) return false;
-      if (thumbFailed[report.id]) return false;
-      return isFetchableReportId(report.id);
-    });
-
-  // When very zoomed in, photo pins need a thumbnail for every visible report —
-  // but the /quadro listing often omits foto payloads. Fetch first images from
-  // the CDN-backed /reporte/imagens endpoint on demand (cached, capped, batched
-  // so we never hammer the backend). Results also feed the shared image cache,
-  // so opening a prefetched report's details panel is instant. Reports with no
-  // image anywhere are recorded in `thumbFailed` so their pins settle on the
-  // fallback disc instead of shimmering forever.
-  React.useEffect(() => {
-    if (!showPhotoPins || filteredReports.length === 0) return;
-
-    const missing = filteredReports.filter((report) => {
-      if (getReportThumb(report, photoThumbs)) return false;
-      if (thumbFailed[report.id]) return false;
-      if (thumbFetchInFlightRef.current.has(report.id)) return false;
-      return isFetchableReportId(report.id);
-    });
-    if (missing.length === 0) return;
-
-    let cancelled = false;
-    // Cap how many reports we prefetch per zoom-in (protects the backend when
-    // the map holds hundreds of pins); the rest keep teardrop pins.
-    const batch = missing.slice(0, 60);
-    batch.forEach((report) => thumbFetchInFlightRef.current.add(report.id));
-
-    const CONCURRENCY = 6;
-    const runBatch = async () => {
-      const collected: Record<string, string> = {};
-      const failed: Record<string, true> = {};
-      for (let i = 0; i < batch.length; i += CONCURRENCY) {
-        if (cancelled) return;
-        const chunk = batch.slice(i, i + CONCURRENCY);
-        const results = await Promise.allSettled(
-          chunk.map(async (report) => ({
-            id: report.id,
-            images: await getReportImages(report.id),
-          }))
-        );
-        if (cancelled) return;
-        results.forEach((result, index) => {
-          const report = chunk[index];
-          thumbFetchInFlightRef.current.delete(report.id);
-          const images = result.status === 'fulfilled' ? result.value.images : [];
-          const first = images.find(Boolean);
-          if (!first) {
-            failed[report.id] = true;
-            return;
-          }
-          collected[report.id] = first;
-          storeCachedReportImages(report.id, images);
-        });
-      }
-      if (cancelled) return;
-      if (Object.keys(collected).length > 0) {
-        setPhotoThumbs((prev) => ({ ...prev, ...collected }));
-      }
-      if (Object.keys(failed).length > 0) {
-        setThumbFailed((prev) => ({ ...prev, ...failed }));
-      }
-    };
-
-    void runBatch();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [showPhotoPins, filteredReports, photoThumbs, thumbFailed]);
 
   // Last theme applied to the basemap. Compared inside effects so the
   // theme effect never re-applies the style the map was just constructed with.
@@ -511,31 +394,9 @@ export default function Map() {
       if (via !== 'load') console.info(`[Urbaly Map] Map ready via ${via}.`);
     };
 
-    // Track zoom + viewport from the start so pins can swap to circular CDN
-    // photo previews when very zoomed in and off-screen markers stay unmounted.
-    // `zoomend`/`moveend` keep React renders cheap (no per-frame setState).
-    const syncZoom = () => {
-      try {
-        const zoom = map.getZoom();
-        setShowPhotoPins((prev) => (prev ? zoom >= PHOTO_ZOOM_EXIT : zoom >= PHOTO_ZOOM_ENTER));
-      } catch {
-        // getZoom is a nicety; a failed read must never break the map.
-      }
-      try {
-        const b = map.getBounds();
-        setMapBounds({
-          south: b.getSouth(),
-          north: b.getNorth(),
-          west: b.getWest(),
-          east: b.getEast(),
-        });
-      } catch {
-        // Bounds read must never break the map.
-      }
-    };
-    syncZoom();
-    map.on('zoomend', syncZoom);
-    map.on('moveend', syncZoom);
+    // Markers are plain DOM pins pinned to coordinates — they never depend
+    // on zoom, so no zoom/move listeners are attached. All markers stay
+    // mounted regardless of viewport or zoom level.
 
     map.on('load', () => {
       settleLoaded('load');
@@ -603,8 +464,6 @@ export default function Map() {
         clearTimeout(loadTimeoutRef.current);
         loadTimeoutRef.current = null;
       }
-      map.off('zoomend', syncZoom);
-      map.off('moveend', syncZoom);
       map.off('styledata', onStyleData);
       resizeObserver?.disconnect();
       setMapInstance(null);
@@ -675,7 +534,7 @@ export default function Map() {
     return () => {
       map.off('click', handleMapClick);
     };
-  }, [isPlacementMode]);
+  }, [isPlacementMode, isDark]);
 
   // Strictly enforce crosshair cursor in placement mode
   React.useEffect(() => {
@@ -957,7 +816,7 @@ export default function Map() {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => setMapRetryKey((value) => value + 1)}
+                onClick={handleRetryMap}
                 className="h-10 rounded-md px-4"
               >
                 Tentar novamente
@@ -983,34 +842,11 @@ export default function Map() {
           </div>
         )}
 
-        {/* Bottom Legend — count + photo-mode hint (no status breakdown) */}
+        {/* Bottom Legend — count only; pins are stable across zoom */}
         <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/80 bg-background/90 px-3.5 py-2 text-[11px] shadow-lg backdrop-blur-md sm:right-auto sm:flex-nowrap sm:py-1.5 dark:bg-zinc-900/90">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <span className="font-mono font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
             <span className="leading-tight">no mapa</span>
-            {visibleReports.length < filteredReports.length && (
-              <span className="leading-tight">· {formatCount(visibleReports.length)} visíveis</span>
-            )}
-          </div>
-          <span className="h-3 w-px bg-border" />
-          <div
-            role="status"
-            aria-live="polite"
-            className={cn(
-              'flex items-center gap-1.5 leading-tight',
-              showPhotoPins ? 'text-primary' : 'text-muted-foreground'
-            )}
-          >
-            <span
-              className={cn(
-                'size-2 rounded-full',
-                showPhotoPins ? 'bg-primary' : 'bg-muted-foreground/40',
-                thumbsLoading && 'animate-pulse'
-              )}
-            />
-            <span>
-              {showPhotoPins ? (thumbsLoading ? 'Carregando fotos…' : 'Modo foto') : 'Aproxime para ver fotos'}
-            </span>
           </div>
         </div>
 
@@ -1048,21 +884,15 @@ export default function Map() {
             </div>
           )}
 
-        {/* Dynamic Map Markers — viewport-virtualized (max 250) so hundreds
-            of reports never mount hundreds of DOM markers at once */}
+        {/* Dynamic Map Markers — every filtered report mounts a stable pin
+            marker that never changes with zoom, so zooming in/out never
+            hides, swaps, or replays markers */}
         {mapInstance &&
-          visibleReports.map((report, index) => {
-            const thumbUrl = getReportThumb(report, photoThumbs);
-            // Skeleton shimmer while a fetchable thumbnail is still outstanding.
-            const thumbPending =
-              showPhotoPins &&
-              !thumbUrl &&
-              !thumbFailed[report.id] &&
-              isFetchableReportId(report.id);
+          markerReports.map((report, index) => {
             return (
               <MapMarker
-                // Stable key: zoom swaps and thumbnail arrivals update the
-                // same marker element in place (CSS crossfade, no remount).
+                // Stable key: the same marker element stays mounted for the
+                // life of the report — no zoom-driven remount or swap.
                 key={report.id}
                 map={mapInstance}
                 pointer={{
@@ -1070,15 +900,14 @@ export default function Map() {
                   coordinates: report.coordinates,
                   category: report.category,
                   title: report.title,
-                  imageUrl: thumbUrl,
-                  imageCount:
-                    report.images?.length || (report.imageUrl ? 1 : thumbUrl ? 1 : 0),
+                  imageUrl: undefined,
+                  imageCount: 0,
                   categoryLabel: CATEGORIES[report.category]?.label ?? report.category,
                   address: report.address,
                   status: report.status,
                   upvotes: report.upvotes,
-                  showPhoto: showPhotoPins,
-                  thumbPending,
+                  showPhoto: false,
+                  thumbPending: false,
                 }}
                 isDark={isDark}
                 delayMs={Math.min(index, 12) * 40}
