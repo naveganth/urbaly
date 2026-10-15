@@ -150,18 +150,77 @@
   animation: photo-pin-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Keep MapLibre zoom/locate controls clear of the floating search card.
-   Desktop card hugs the left; on mobile the full-width card + chips stack
-   needs the controls pushed down. Safe-area keeps them off the notch. */
-.maplibregl-ctrl-top-right {
-  margin-top: calc(4px + env(safe-area-inset-top));
-  margin-right: calc(4px + env(safe-area-inset-right));
+/* Maps-style controls: bottom-right stack of circular white cards.
+   Navigation (zoom) + geolocate are added with 'bottom-right' in map.tsx.
+   Mobile shows locate only (zoom hidden) like the Google Maps app. */
+.maplibregl-ctrl-bottom-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  margin-right: calc(12px + env(safe-area-inset-right));
+  /* Sits above the Reportar FAB (FAB ~ bottom 5.5rem mobile / 2rem desktop). */
+  margin-bottom: calc(10rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .maplibregl-ctrl-bottom-right {
+    margin-right: 16px;
+    margin-bottom: calc(7rem + env(safe-area-inset-bottom));
+  }
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dark .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+  background: oklch(0.21 0.006 285.885 / 0.95);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+  touch-action: manipulation;
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--border);
+}
+
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-icon {
+  filter: none;
+}
+
+/* Compass adds noise next to the category UX — zoom in/out is enough. */
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-compass {
+  display: none;
 }
 
 @media (max-width: 767px) {
-  .maplibregl-ctrl-top-right {
-    margin-top: calc(122px + env(safe-area-inset-top));
+  .maplibregl-ctrl-bottom-right .maplibregl-ctrl-zoom-in,
+  .maplibregl-ctrl-bottom-right .maplibregl-ctrl-zoom-out {
+    display: none;
   }
+}
+
+/* Keep attribution compact and clear of the legend/FAB. */
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+  border-radius: 8px 0 0 0;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--muted-foreground);
 }
 
 @utility scrollbar-none {

@@ -53,7 +53,7 @@ const STATUS_CONFIG: Record<
 };
 
 const PANEL_POSITION =
-  'absolute z-10 inset-x-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-h-[62dvh] md:inset-x-auto md:left-3 md:top-[76px] md:bottom-16 md:w-[400px] md:max-h-none';
+  'absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[136px] md:bottom-6 md:w-[400px] md:max-h-none';
 
 function PanelShell({
   children,
@@ -75,9 +75,13 @@ function PanelShell({
       transition={shouldReduceMotion ? { duration: 0 } : SPRING_DEFAULT}
       className={cn(
         PANEL_POSITION,
-        'flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl'
+        'flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card text-card-foreground shadow-2xl md:rounded-2xl md:border-b'
       )}
     >
+      {/* Mobile grabber — desktop floats, no handle needed */}
+      <div aria-hidden className="flex shrink-0 justify-center pb-1 pt-2 md:hidden">
+        <span className="h-1 w-10 rounded-full bg-border" />
+      </div>
       {children}
     </motion.section>
   );
@@ -379,31 +383,32 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
           Relatado em {formattedDate}
         </p>
 
-        {/* Maps-like actions */}
-        <div className="mt-3 grid grid-cols-3 gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleUpvote}
-            disabled={hasUpvoted}
-            className={cn('h-9 gap-1.5 text-xs', hasUpvoted && 'bg-primary/15 text-primary hover:bg-primary/20')}
-          >
-            <ThumbsUp className={cn('size-3.5', hasUpvoted && 'fill-current')} />
-            {hasUpvoted ? 'Apoiado' : 'Apoiar'}
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleShare} aria-label="Compartilhar ocorrência" className="h-9 gap-1.5 truncate text-xs">
-            <Share2 className="size-3.5 shrink-0" />
-            {copied ? 'Copiado!' : 'Partilhar'}
-          </Button>
+        {/* Maps-like actions — primary route pill + outline pills */}
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <a
             href={directionsUrl}
             target="_blank"
             rel="noreferrer"
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-9 gap-1.5 text-xs')}
+            className={cn(buttonVariants({ size: 'sm' }), 'h-10 gap-1.5 rounded-full text-xs font-semibold')}
           >
             <Navigation className="size-3.5" />
-            Rota
+            Rotas
           </a>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleUpvote}
+            disabled={hasUpvoted}
+            className={cn('h-10 gap-1.5 rounded-full text-xs', hasUpvoted && 'border-primary/40 bg-primary/10 text-primary')}
+          >
+            <ThumbsUp className={cn('size-3.5', hasUpvoted && 'fill-current')} />
+            {hasUpvoted ? 'Apoiado' : 'Apoiar'}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleShare} aria-label="Compartilhar ocorrência" className="h-10 gap-1.5 truncate rounded-full text-xs">
+            <Share2 className="size-3.5 shrink-0" />
+            {copied ? 'Copiado!' : 'Partilhar'}
+          </Button>
         </div>
 
         <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">

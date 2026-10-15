@@ -25,7 +25,7 @@ import {
   categoryToApi,
   REPORT_IMAGE_CDN,
 } from './types';
-import { SearchFilters } from './search-filters';
+import { MapAccountButton, MapCategoryPills, MapFilterButton, MapIconRail, MapSearchCard } from './map-shell';
 import { ReportWizardSheet } from './report-wizard-card';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
@@ -155,6 +155,7 @@ export default function Map() {
   const [isPlacementMode, setIsPlacementMode] = React.useState(false);
   const [placementCoordinates, setPlacementCoordinates] = React.useState<[number, number] | null>(null);
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
+  const [isNavOpen, setIsNavOpen] = React.useState(false);
   const [selectedReport, setSelectedReport] = React.useState<StreetReport | null>(null);
   const { images: gatedImages, isReady: isDetailsReady } = useGatedReportImages(selectedReport);
   const isDetailsLoading = selectedReport !== null && !isDetailsReady;
@@ -445,7 +446,7 @@ export default function Map() {
       }
     }, 20000);
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.addControl(
       new maplibregl.GeolocateControl({
         positionOptions: {
@@ -455,7 +456,7 @@ export default function Map() {
         showUserLocation: true,
         showAccuracyCircle: true,
       }),
-      'top-right'
+      'bottom-right'
     );
 
     return () => {
@@ -581,8 +582,8 @@ export default function Map() {
         center: selectedReport.coordinates,
         duration: 600,
         padding: isDesktop
-          ? { top: 60, bottom: 60, left: 440, right: 60 }
-          : { top: 60, bottom: 320, left: 20, right: 20 },
+          ? { top: 150, bottom: 60, left: 448, right: 60 }
+          : { top: 130, bottom: 340, left: 20, right: 20 },
       });
     } catch {
       // Padding-aware pan is a nicety; never break selection if it fails.
@@ -605,8 +606,8 @@ export default function Map() {
         center: placementCoordinates,
         duration: 600,
         padding: isDesktop
-          ? { top: 132, bottom: 60, left: 60, right: 440 }
-          : { top: 60, bottom: 380, left: 20, right: 20 },
+          ? { top: 150, bottom: 60, left: 32, right: 460 }
+          : { top: 130, bottom: 400, left: 20, right: 20 },
       });
     } catch {
       // Padding-aware pan is a nicety; never break placement if it fails.
@@ -734,308 +735,298 @@ export default function Map() {
   };
 
   return (
-    <div className="flex h-dvh w-full flex-col gap-2 overflow-hidden">
-      {(isOffline || reportsError) && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100"
-        >
-          <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>
-            {isOffline
-              ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
-              : reportsError}
-          </span>
-        </div>
-      )}
+    <div className="flex h-full w-full overflow-hidden bg-background">
+      <MapIconRail />
 
-      {/* Interactive Map Container — search + categories float Google Maps-style */}
-      <div
-        ref={mapContainerRef}
-        role="application"
-        aria-label="Mapa de ocorrências. Use Tab para navegar entre os marcadores e Enter para ver detalhes."
-        className={cn(
-          'relative w-full flex-1 min-h-0 overflow-hidden rounded-md border border-border/70 bg-muted shadow-foreground/5 transition-[border-color,box-shadow]',
-          isPlacementMode && 'placement-mode-active'
-        )}
-      >
-        {/* Floating search + unified category filter (Google Maps-style, single item) */}
-        <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-3 md:top-3 md:w-[420px]">
-          <SearchFilters
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            categoryCounts={categoryCounts}
-            isLoading={isDetailsLoading}
-          />
-          {hasActiveFilters && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
-              {selectedCategory !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory('all')}
-                  aria-label={`Remover filtro ${CATEGORIES[selectedCategory]?.label ?? selectedCategory}`}
-                  className="inline-flex h-8 cursor-pointer touch-manipulation items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 text-[11px] font-medium text-foreground backdrop-blur-md transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="max-w-40 truncate" title={CATEGORIES[selectedCategory]?.label ?? selectedCategory}>
-                    {CATEGORIES[selectedCategory]?.label ?? selectedCategory}
-                  </span>
-                  <X className="size-3 shrink-0" aria-hidden="true" />
-                </button>
-              )}
-              {searchQuery.trim() && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  aria-label={`Remover busca ${searchQuery.trim()}`}
-                  className="inline-flex h-8 max-w-full cursor-pointer touch-manipulation items-center gap-1.5 rounded-full border border-border/70 bg-background/95 px-2.5 text-[11px] font-medium text-foreground backdrop-blur-md transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="max-w-40 truncate" title={searchQuery.trim()}>
-                    “{searchQuery.trim()}”
-                  </span>
-                  <X className="size-3 shrink-0" aria-hidden="true" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                }}
-                className="h-8 cursor-pointer touch-manipulation rounded-full px-2 text-[11px] font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Limpar tudo
-              </button>
-            </div>
-          )}
-        </div>
-
-        {showMapLoader && !mapError && (
+      {/* Map column — offline banner floats over the basemap */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {(isOffline || reportsError) && (
           <div
             role="status"
             aria-live="polite"
-            aria-label="Carregando mapa"
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-muted"
+            className="absolute inset-x-3 top-3 z-30 flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 backdrop-blur-md md:left-4 dark:text-amber-100"
           >
-            <div className="h-10 w-10 animate-pulse rounded-md border border-border/70 bg-card shadow-sm" />
-            <span className="text-xs font-medium text-muted-foreground">Carregando mapa…</span>
-            {slowMap && (
-              <span className="text-[11px] text-muted-foreground">
-                Ainda carregando — sua rede parece lenta. Aguarde um pouco mais.
-              </span>
-            )}
+            <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              {isOffline
+                ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
+                : reportsError}
+            </span>
           </div>
         )}
 
-        {mapError && (
-          <div
-            role="alert"
-            className="absolute inset-0 z-20 flex items-center justify-center bg-muted/95 px-6 text-center"
-          >
-            <div className="flex max-w-sm flex-col items-center gap-3 rounded-md border border-border bg-card px-5 py-4 shadow-lg">
-              <Info className="size-5 text-amber-500" />
-              <p className="text-sm font-medium text-foreground">{mapError}</p>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleRetryMap}
-                className="h-10 rounded-md px-4"
-              >
-                Tentar novamente
-              </Button>
-            </div>
+        {/* Interactive Map Container — Maps shell floats over the canvas */}
+        <div
+          ref={mapContainerRef}
+          role="application"
+          aria-label="Mapa de ocorrências. Use Tab para navegar entre os marcadores e Enter para ver detalhes."
+          className={cn(
+            'relative min-h-0 w-full flex-1 overflow-hidden bg-muted transition-[border-color,box-shadow]',
+            isPlacementMode && 'placement-mode-active'
+          )}
+        >
+          {/* Floating Maps chrome: search card + category pills */}
+          <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-4 md:top-4 md:w-[440px]">
+            <MapSearchCard
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              isLoading={isDetailsLoading}
+              drawerOpen={isNavOpen}
+              onDrawerChange={setIsNavOpen}
+              rightSlot={
+                <>
+                  <MapFilterButton
+                    selectedCategory={selectedCategory}
+                    onCategoryChange={setSelectedCategory}
+                    categoryCounts={categoryCounts}
+                  />
+                  {/* Mobile keeps the account inside the search card like the Maps app */}
+                  <span className="md:hidden">
+                    <MapAccountButton />
+                  </span>
+                </>
+              }
+            />
           </div>
-        )}
 
-        {/* Placement Mode Top Overlay Banner — sits below the floating search.
-            Hidden once the form card takes over (the point is already picked). */}
-        {isPlacementMode && !isSheetOpen && (
-          <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[116px] dark:bg-zinc-900/95">
-            <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
-            <Crosshair aria-hidden="true" className="size-4 text-primary" />
-            <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
-            <button
-              type="button"
-              onClick={handleCancelPlacement}
-              className="ml-1 size-11 shrink-0 cursor-pointer touch-manipulation rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Fechar aviso de marcação"
+          {/* Floating account — desktop top-right like Google Maps */}
+          <div className="absolute top-4 right-4 z-20 hidden md:block">
+            <MapAccountButton />
+          </div>
+
+          <div className="absolute inset-x-3 top-[68px] z-20 md:left-4 md:right-4 md:top-[72px] md:inset-x-auto">
+            <MapCategoryPills
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              categoryCounts={categoryCounts}
+            />
+          </div>
+
+          {showMapLoader && !mapError && (
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label="Carregando mapa"
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-muted"
             >
-              <X className="mx-auto size-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* Bottom Legend — count only; pins are stable across zoom */}
-        <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/80 bg-background/90 px-3.5 py-2 text-[11px] shadow-lg backdrop-blur-md sm:right-auto sm:flex-nowrap sm:py-1.5 dark:bg-zinc-900/90">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="font-mono font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
-            <span className="leading-tight">no mapa</span>
-          </div>
-        </div>
-
-        {/* Empty state hint */}
-        {filteredReports.length === 0 &&
-          !isMapLoading &&
-          !isReportsLoading &&
-          !mapError &&
-          !reportsError && (
-            <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
-              <div className="flex max-w-sm flex-col items-center gap-2 rounded-md border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
-                <Info className="size-4 text-amber-500" />
-                <span>
-                  {hasActiveFilters
-                    ? 'Nenhum problema encontrado com estes filtros.'
-                    : 'Ainda não há problemas registrados nesta área.'}
+              <div className="h-10 w-10 animate-pulse rounded-md border border-border/70 bg-card shadow-sm" />
+              <span className="text-xs font-medium text-muted-foreground">Carregando mapa…</span>
+              {slowMap && (
+                <span className="text-[11px] text-muted-foreground">
+                  Ainda carregando — sua rede parece lenta. Aguarde um pouco mais.
                 </span>
+              )}
+            </div>
+          )}
+
+          {mapError && (
+            <div
+              role="alert"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-muted/95 px-6 text-center"
+            >
+              <div className="flex max-w-sm flex-col items-center gap-3 rounded-md border border-border bg-card px-5 py-4 shadow-lg">
+                <Info className="size-5 text-amber-500" />
+                <p className="text-sm font-medium text-foreground">{mapError}</p>
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    if (hasActiveFilters) {
-                      setSearchQuery('');
-                      setSelectedCategory('all');
-                    } else {
-                      setIsPlacementMode(true);
-                    }
-                  }}
-                  className="mt-1 h-9 rounded-md px-3 text-xs"
+                  onClick={handleRetryMap}
+                  className="h-10 rounded-md px-4"
                 >
-                  {hasActiveFilters ? 'Limpar filtros' : 'Reportar um problema'}
+                  Tentar novamente
                 </Button>
               </div>
             </div>
           )}
 
-        {/* Dynamic Map Markers — every filtered report mounts a stable pin
-            marker that never changes with zoom, so zooming in/out never
-            hides, swaps, or replays markers */}
-        {mapInstance &&
-          markerReports.map((report, index) => {
-            return (
-              <MapMarker
-                // Stable key: the same marker element stays mounted for the
-                // life of the report — no zoom-driven remount or swap.
-                key={report.id}
-                map={mapInstance}
-                pointer={{
-                  id: report.id,
-                  coordinates: report.coordinates,
-                  category: report.category,
-                  title: report.title,
-                  imageUrl: undefined,
-                  imageCount: 0,
-                  categoryLabel: CATEGORIES[report.category]?.label ?? report.category,
-                  address: report.address,
-                  status: report.status,
-                  upvotes: report.upvotes,
-                  showPhoto: false,
-                  thumbPending: false,
-                }}
-                isDark={isDark}
-                delayMs={Math.min(index, 12) * 40}
-                isSelected={selectedReport?.id === report.id}
-                onClick={() => {
-                  // Toggle like Maps: re-clicking the same pin dismisses the panel.
-                  setSelectedReport((prev) => (prev?.id === report.id ? null : report));
-                }}
-              />
-            );
-          })}
-
-        {/* Report FAB — Maps-style floating action, bottom-right */}
-        <Button
-          type="button"
-          onClick={() => {
-            setIsPlacementMode((prev) => !prev);
-            if (isPlacementMode) {
-              handleCancelPlacement();
-            }
-          }}
-          aria-pressed={isPlacementMode}
-          aria-label={isPlacementMode ? 'Cancelar modo de marcação' : 'Reportar problema no mapa'}
-          aria-describedby={!jwt && !isPlacementMode ? 'report-fab-auth-hint' : undefined}
-          title={!jwt && !isPlacementMode ? 'Entre com sua conta Google para publicar' : undefined}
-          className={cn(
-            'absolute bottom-[calc(4rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
-            selectedReport &&
-            'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
-            // The right-docked form card owns the FAB corner on every
-            // breakpoint while the reporting flow is active.
-            isSheetOpen && 'pointer-events-none translate-y-2 opacity-0',
-            isPlacementMode
-              ? 'bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600'
-              : 'bg-primary text-primary-foreground shadow-primary/30 hover:bg-primary/90'
-          )}
-        >
-          {isPlacementMode ? (
-            <>
-              <X className="size-4" />
-              Cancelar
-            </>
-          ) : (
-            <>
-              <CircleAlert className="report-action-icon size-4" aria-hidden="true" />
-              Reportar
-            </>
-          )}
-        </Button>
-        {!jwt && !isPlacementMode && (
-          <span id="report-fab-auth-hint" className="sr-only">
-            Para publicar um reporte, entre com sua conta Google.
-          </span>
-        )}
-
-        {/* Google Maps-style floating details: skeleton mirrors the panel
-            layout while images preload (no CLS on reveal) */}
-        <AnimatePresence>
-          {selectedReport && !isDetailsReady && (
-            <div
-              key={`skeleton-${selectedReport.id}`}
-              role="status"
-              aria-label="Carregando detalhes da ocorrência"
-              aria-busy="true"
-              className="absolute z-10 inset-x-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-h-[62dvh] md:inset-x-auto md:left-3 md:top-[76px] md:bottom-16 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
-            >
-              <div aria-hidden="true" className="h-52 w-full shrink-0 animate-pulse bg-muted md:h-56" />
-              <div aria-hidden="true" className="flex flex-col gap-2.5 px-4 py-4 md:px-5">
-                <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
-                <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-full animate-pulse rounded bg-muted" />
-                <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
-              </div>
+          {/* Placement Mode Top Overlay Banner — sits below pills.
+              Hidden once the form card takes over (the point is already picked). */}
+          {isPlacementMode && !isSheetOpen && (
+            <div role="status" className="absolute left-3 right-3 top-[122px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center text-xs font-semibold text-foreground shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[128px] dark:bg-zinc-900/95">
+              <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
+              <Crosshair aria-hidden="true" className="size-4 text-primary" />
+              <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
+              <button
+                type="button"
+                onClick={handleCancelPlacement}
+                className="ml-1 size-11 shrink-0 cursor-pointer touch-manipulation rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Fechar aviso de marcação"
+              >
+                <X className="mx-auto size-3.5" />
+              </button>
             </div>
           )}
-          {selectedReport && isDetailsReady && (
-            <ReportDetailsPanel
-              key={selectedReport.id}
-              report={selectedReport}
-              images={gatedImages}
-              onClose={() => setSelectedReport(null)}
-              onUpvote={handleUpvote}
-              onPrev={
-                filteredReports.length > 1 ? () => handleSelectAdjacent(-1) : undefined
-              }
-              onNext={
-                filteredReports.length > 1 ? () => handleSelectAdjacent(1) : undefined
-              }
-              position={selectedIndex >= 0 ? selectedIndex + 1 : undefined}
-              total={filteredReports.length > 1 ? filteredReports.length : undefined}
-            />
-          )}
-        </AnimatePresence>
 
-        {/* Report form: 3-step wizard card / bottom sheet over the basemap */}
-        <ReportWizardSheet
-          isOpen={isSheetOpen}
-          onOpenChange={setIsSheetOpen}
-          coordinates={placementCoordinates}
-          onSubmit={handleAddReport}
-          onCancelPlacement={handleCancelPlacement}
-          isAuthenticated={!!jwt}
-        />
+          {/* Bottom Legend — count only; pins are stable across zoom */}
+          <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 text-[11px] shadow-lg backdrop-blur-md md:left-4 dark:bg-zinc-900/90">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="font-mono font-semibold tabular-nums text-foreground">{formatCount(filteredReports.length)}</span>
+              <span className="leading-tight">no mapa</span>
+            </div>
+          </div>
+
+          {/* Empty state hint */}
+          {filteredReports.length === 0 &&
+            !isMapLoading &&
+            !isReportsLoading &&
+            !mapError &&
+            !reportsError && (
+              <div className="absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4">
+                <div className="flex max-w-sm flex-col items-center gap-2 rounded-2xl border border-border bg-background/95 px-4 py-3 text-center text-xs text-muted-foreground shadow-xl backdrop-blur-md dark:bg-zinc-900/95">
+                  <Info className="size-4 text-amber-500" />
+                  <span>
+                    {hasActiveFilters
+                      ? 'Nenhum problema encontrado com estes filtros.'
+                      : 'Ainda não há problemas registrados nesta área.'}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (hasActiveFilters) {
+                        setSearchQuery('');
+                        setSelectedCategory('all');
+                      } else {
+                        setIsPlacementMode(true);
+                      }
+                    }}
+                    className="mt-1 h-9 rounded-full px-4 text-xs"
+                  >
+                    {hasActiveFilters ? 'Limpar filtros' : 'Reportar um problema'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+          {/* Dynamic Map Markers — every filtered report mounts a stable pin
+              marker that never changes with zoom, so zooming in/out never
+              hides, swaps, or replays markers */}
+          {mapInstance &&
+            markerReports.map((report, index) => {
+              return (
+                <MapMarker
+                  // Stable key: the same marker element stays mounted for the
+                  // life of the report — no zoom-driven remount or swap.
+                  key={report.id}
+                  map={mapInstance}
+                  pointer={{
+                    id: report.id,
+                    coordinates: report.coordinates,
+                    category: report.category,
+                    title: report.title,
+                    imageUrl: undefined,
+                    imageCount: 0,
+                    categoryLabel: CATEGORIES[report.category]?.label ?? report.category,
+                    address: report.address,
+                    status: report.status,
+                    upvotes: report.upvotes,
+                    showPhoto: false,
+                    thumbPending: false,
+                  }}
+                  isDark={isDark}
+                  delayMs={Math.min(index, 12) * 40}
+                  isSelected={selectedReport?.id === report.id}
+                  onClick={() => {
+                    // Toggle like Maps: re-clicking the same pin dismisses the panel.
+                    setSelectedReport((prev) => (prev?.id === report.id ? null : report));
+                  }}
+                />
+              );
+            })}
+
+          {/* Report FAB — Maps-style floating action above bottom-right controls */}
+          <Button
+            type="button"
+            onClick={() => {
+              setIsPlacementMode((prev) => !prev);
+              if (isPlacementMode) {
+                handleCancelPlacement();
+              }
+            }}
+            aria-pressed={isPlacementMode}
+            aria-label={isPlacementMode ? 'Cancelar modo de marcação' : 'Reportar problema no mapa'}
+            aria-describedby={!jwt && !isPlacementMode ? 'report-fab-auth-hint' : undefined}
+            title={!jwt && !isPlacementMode ? 'Entre com sua conta Google para publicar' : undefined}
+            className={cn(
+              'absolute bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-[calc(0.75rem+env(safe-area-inset-right))] z-20 h-12 cursor-pointer touch-manipulation gap-2 rounded-full px-5 text-sm font-semibold shadow-xl transition-[transform,opacity,background-color] duration-150 active:scale-[0.97] md:bottom-8 md:right-4',
+              selectedReport &&
+              'pointer-events-none translate-y-2 opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100',
+              // The right-docked form card owns the FAB corner on every
+              // breakpoint while the reporting flow is active.
+              isSheetOpen && 'pointer-events-none translate-y-2 opacity-0',
+              isPlacementMode
+                ? 'bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600'
+                : 'bg-primary text-primary-foreground shadow-primary/30 hover:bg-primary/90'
+            )}
+          >
+            {isPlacementMode ? (
+              <>
+                <X className="size-4" />
+                Cancelar
+              </>
+            ) : (
+              <>
+                <CircleAlert className="report-action-icon size-4" aria-hidden="true" />
+                Reportar
+              </>
+            )}
+          </Button>
+          {!jwt && !isPlacementMode && (
+            <span id="report-fab-auth-hint" className="sr-only">
+              Para publicar um reporte, entre com sua conta Google.
+            </span>
+          )}
+
+          {/* Maps-style floating details: skeleton mirrors the panel
+              layout while images preload (no CLS on reveal) */}
+          <AnimatePresence>
+            {selectedReport && !isDetailsReady && (
+              <div
+                key={`skeleton-${selectedReport.id}`}
+                role="status"
+                aria-label="Carregando detalhes da ocorrência"
+                aria-busy="true"
+                className="absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[136px] md:bottom-6 md:w-[400px] md:max-h-none flex flex-col overflow-hidden rounded-t-3xl border border-b-0 border-border bg-card shadow-2xl md:rounded-2xl md:border-b"
+              >
+                <div aria-hidden="true" className="h-52 w-full shrink-0 animate-pulse bg-muted md:h-56" />
+                <div aria-hidden="true" className="flex flex-col gap-2.5 px-4 py-4 md:px-5">
+                  <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-full animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+                </div>
+              </div>
+            )}
+            {selectedReport && isDetailsReady && (
+              <ReportDetailsPanel
+                key={selectedReport.id}
+                report={selectedReport}
+                images={gatedImages}
+                onClose={() => setSelectedReport(null)}
+                onUpvote={handleUpvote}
+                onPrev={
+                  filteredReports.length > 1 ? () => handleSelectAdjacent(-1) : undefined
+                }
+                onNext={
+                  filteredReports.length > 1 ? () => handleSelectAdjacent(1) : undefined
+                }
+                position={selectedIndex >= 0 ? selectedIndex + 1 : undefined}
+                total={filteredReports.length > 1 ? filteredReports.length : undefined}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Report form: 3-step wizard card / bottom sheet over the basemap */}
+          <ReportWizardSheet
+            isOpen={isSheetOpen}
+            onOpenChange={setIsSheetOpen}
+            coordinates={placementCoordinates}
+            onSubmit={handleAddReport}
+            onCancelPlacement={handleCancelPlacement}
+            isAuthenticated={!!jwt}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,9 @@
-import { MapLayout } from '@/components/layout/map-layout';
 import Map from '@/components/map/map';
 
 export default function MapPage() {
   return (
-    <MapLayout>
+    <div className="flex h-svh w-screen overflow-hidden bg-background">
       <Map />
-    </MapLayout>
+    </div>
   );
 }
