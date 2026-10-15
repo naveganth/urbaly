@@ -51,6 +51,11 @@ interface MapMarkerProps {
 // Later remounts render instantly (no stagger replay after pan/zoom/filter).
 const animatedMarkerIds = new Set<string>();
 
+/** Clear the entrance-animation ledger so the next map-page entry replays the cascade. */
+export function resetMarkerEntranceAnimation(): void {
+  animatedMarkerIds.clear();
+}
+
 export const MapMarker = React.memo(function MapMarker({
   map,
   pointer,
@@ -71,9 +76,6 @@ export const MapMarker = React.memo(function MapMarker({
     if (!map) return;
 
     const shouldAnimate = animateIn && !animatedMarkerIds.has(pointer.id);
-    animatedMarkerIds.add(pointer.id);
-    // Bound the session set so long-lived sessions never grow it without limit.
-    if (animatedMarkerIds.size > 2000) animatedMarkerIds.clear();
 
     const handle = createAdaptiveMarkerElement({
       category: pointer.category,
@@ -118,7 +120,23 @@ export const MapMarker = React.memo(function MapMarker({
     markerRef.current = marker;
     handleRef.current = handle;
 
+    // Ledger the id only AFTER the entrance actually played (stagger delay
+    // + 260ms drop + buffer). A mount torn down first — StrictMode remount,
+    // theme flip before paint — never consumes the animation, so the
+    // surviving mount replays it instead of painting instantly.
+    let ledgerTimer: number | undefined;
+    if (shouldAnimate) {
+      ledgerTimer = window.setTimeout(() => {
+        animatedMarkerIds.add(pointer.id);
+        // Bound the session set so long-lived sessions never grow it without limit.
+        if (animatedMarkerIds.size > 2000) animatedMarkerIds.clear();
+      }, delayMs + 300);
+    } else {
+      animatedMarkerIds.add(pointer.id);
+    }
+
     return () => {
+      if (ledgerTimer !== undefined) window.clearTimeout(ledgerTimer);
       el.removeEventListener('click', handleClick);
       el.removeEventListener('keydown', handleKeyDown as EventListener);
       marker.remove();

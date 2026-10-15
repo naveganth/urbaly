@@ -34,25 +34,3 @@ export function toggleThemeWithTransition(
   // needed for the "center circle" effect.
   (document as Document & { startViewTransition: (cb: () => void) => void }).startViewTransition(updateTheme);
 }
-
-/**
- * Run a map style swap inside a center-circle reveal when the View
- * Transitions API is available; otherwise run it directly (the map
- * canvas crossfades via CSS). Skips the animation for reduced-motion
- * users. Theme-driven swaps should NOT use this — the root theme
- * transition already covers them; use it for basemap-only switches.
- */
-export function applyMapStyleWithCircleTransition(applyStyle: () => void): void {
-  if (!supportsViewTransition() || prefersReducedMotion()) {
-    applyStyle();
-    return;
-  }
-
-  try {
-    (document as Document & { startViewTransition: (cb: () => void) => void }).startViewTransition(
-      applyStyle,
-    );
-  } catch {
-    applyStyle();
-  }
-}

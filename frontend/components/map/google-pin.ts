@@ -151,7 +151,7 @@ export function createGooglePinElement({
         viewBox="0 0 30 42"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        style="filter: drop-shadow(0 6px 14px rgba(0,0,0,0.26)); display: block;"
+        style="display: block;"
         class="google-pin-svg"
       >
         <path

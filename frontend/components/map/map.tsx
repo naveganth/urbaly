@@ -30,7 +30,7 @@ import { ReportDetailsPanel } from './report-details-panel';
 import {
   useGatedReportImages,
 } from './use-report-images';
-import { MapMarker } from './map-marker';
+import { MapMarker, resetMarkerEntranceAnimation } from './map-marker';
 import { createPlacementMarkerElement } from './placement-pin';
 import {
   DARK_BASEMAPS,
@@ -40,7 +40,6 @@ import {
   type BasemapId,
 } from './google-maps-style';
 import { usePublicConfig } from '@/lib/public-config';
-import { applyMapStyleWithCircleTransition } from '@/lib/theme-transition';
 
 function prefersReducedMotion(): boolean {
   return (
@@ -420,6 +419,31 @@ export default function Map() {
   // count. (Viewport virtualization was intentionally removed.)
   const markerReports = filteredReports;
 
+  // Entrance cascade, top of the screen to bottom: rank pins by latitude
+  // descending (north paints first at the boot viewport) and stagger the
+  // drop-in delay by rank. Same timing budget as before (40ms steps,
+  // capped) so the cascade stays snappy. Already-animated ids ignore the
+  // delay (see animatedMarkerIds) — only the first paint cascades.
+  const markerDelays = React.useMemo(() => {
+    const ranked = [...markerReports].sort(
+      (a, b) => b.coordinates[1] - a.coordinates[1]
+    );
+    const delays = new globalThis.Map<string, number>();
+    ranked.forEach((report, rank) => {
+      delays.set(report.id, Math.min(rank, 12) * 40);
+    });
+    return delays;
+  }, [markerReports]);
+
+  // Replay the entrance cascade every time the page is entered: leaving
+  // /mapa unmounts Map, so clear the ledger on unmount only (empty deps —
+  // retries and theme switches keep the component mounted and stay instant).
+  React.useEffect(() => {
+    return () => {
+      resetMarkerEntranceAnimation();
+    };
+  }, []);
+
   // Per-category occurrence counts for the filter rows.
   const categoryCounts = React.useMemo(() => {
     const counts = Object.fromEntries(CATEGORY_ORDER.map((cat) => [cat, 0])) as Record<
@@ -789,9 +813,9 @@ export default function Map() {
   // recreating the map. DOM markers (MapMarker / placement pin) survive
   // setStyle, so no state is lost. Works before 'load' too: setStyle simply
   // swaps the pending style request.
-  // Theme-driven swaps skip the circle (the root theme transition already
-  // reveals from the center); basemap-only switches get the same
-  // center-circle reveal via the shared ::view-transition-new(root) rule.
+  // Basemap-only switches play the shared center-circle wipe
+  // (::view-transition-new(root) — just the circle, no tint). Theme-driven
+  // swaps apply directly: the root theme transition already covers them.
   React.useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -813,11 +837,20 @@ export default function Map() {
           console.warn('[Urbaly Map] Basemap style apply failed:', styleError);
         }
       };
-      if (themeChanged) {
+      if (themeChanged || prefersReducedMotion()) {
         applyStyle();
         return;
       }
-      applyMapStyleWithCircleTransition(applyStyle);
+      try {
+        const doc = document as Document & { startViewTransition?: (cb: () => void) => void };
+        if (typeof doc.startViewTransition === 'function') {
+          doc.startViewTransition(applyStyle);
+          return;
+        }
+      } catch {
+        // Fall through to direct apply below.
+      }
+      applyStyle();
     });
   }, [isDark, effectiveBasemap, cartoApiKey]);
 
@@ -1343,9 +1376,10 @@ export default function Map() {
 
           {/* Dynamic Map Markers — every filtered report mounts a stable pin
               marker that never changes with zoom, so zooming in/out never
-              hides, swaps, or replays markers */}
+              hides, swaps, or replays markers. Entrance cascades top to
+              bottom on first paint (see markerDelays). */}
           {mapInstance &&
-            markerReports.map((report, index) => {
+            markerReports.map((report) => {
               return (
                 <MapMarker
                   // Stable key: the same marker element stays mounted for the
@@ -1367,7 +1401,7 @@ export default function Map() {
                     thumbPending: false,
                   }}
                   isDark={isDark}
-                  delayMs={Math.min(index, 12) * 40}
+                  delayMs={markerDelays.get(report.id) ?? 0}
                   isSelected={selectedReport?.id === report.id}
                   onClick={() => {
                     // Toggle like Maps: re-clicking the same pin dismisses the panel.

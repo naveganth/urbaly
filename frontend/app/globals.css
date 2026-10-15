@@ -12,7 +12,7 @@
 ::view-transition-new(root) {
   position: relative;
   z-index: 1;
-  animation: theme-reveal 1000ms ease-in;
+  animation: theme-reveal 600ms ease-out;
 }
 
 @keyframes theme-reveal {
@@ -561,7 +561,6 @@ img.js-photo-img[src]:not(.is-loaded) ~ .marker-photo-loader,
   width: 30px;
   flex-direction: column;
   align-items: center;
-  filter: drop-shadow(0 6px 14px rgba(13, 159, 110, 0.4));
   animation: map-pin-drop 260ms ease-out both;
   transform-origin: bottom center;
 }
