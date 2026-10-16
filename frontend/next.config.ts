@@ -21,6 +21,28 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async headers() {
+    return [
+      {
+        // The service worker must never be served from the HTTP cache stale,
+        // or updates stop reaching clients. Scope header is explicit even
+        // though /sw.js already gets root scope by default.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      {
+        // Icons are regenerated only when the logo changes (npm run icons);
+        // content-hashed by name bump, so long-lived caching is safe.
+        source: "/icons/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

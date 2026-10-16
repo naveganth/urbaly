@@ -4,6 +4,7 @@ import { Inter, Instrument_Sans } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/lib/auth-context';
+import { PwaRegister } from '@/components/pwa-register';
 
 import { REPORT_IMAGE_CDN } from '@/components/map/types';
 
@@ -79,6 +80,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         <ThemeProvider>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
+        <PwaRegister />
       </body>
     </html>
   );

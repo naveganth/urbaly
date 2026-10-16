@@ -1635,11 +1635,18 @@ export default function Map() {
             className="absolute inset-x-3 top-3 z-30 flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 backdrop-blur-md md:left-4 dark:text-amber-100"
           >
             <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span>
+            <span className="min-w-0 flex-1">
               {isOffline
-                ? 'Você está offline. O mapa pode mostrar dados desatualizados; tente novamente quando a conexão voltar.'
+                ? 'Você está offline. O mapa pode mostrar dados desatualizados; as páginas já visitadas continuam disponíveis.'
                 : reportsError}
             </span>
+            <button
+              type="button"
+              onClick={handleRetryMap}
+              className="shrink-0 cursor-pointer touch-manipulation self-center rounded-full border border-amber-500/40 px-3 py-1.5 font-semibold text-amber-700 outline-none transition-colors hover:bg-amber-500/15 focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-200"
+            >
+              Tentar novamente
+            </button>
           </div>
         )}
 
