@@ -1082,7 +1082,7 @@ export default function Map() {
         center: [...DEFAULT_CENTER] as [number, number],
         zoom: DEFAULT_ZOOM,
         maxZoom: 20,
-        minZoom: 9,
+        minZoom: 3,
       });
     } catch (constructionError) {
       console.error('[Urbaly Map] Failed to construct the map:', constructionError);

@@ -132,7 +132,7 @@ const H3_AVG_AREA_KM2: Record<number, number> = {
   10: 0.015,
 };
 
-const MAX_EMPTY_CELLS = 8000;
+const MAX_EMPTY_CELLS = 30000;
 
 /**
  * Expand a view by `factor` of its size on every side so the empty grid
