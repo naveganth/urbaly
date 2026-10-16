@@ -3,6 +3,7 @@
 import http from 'http';
 import https from 'https';
 import { getServerEnv } from '@/lib/env';
+import { MACAPA_BOUNDS } from '@/components/map/types';
 
 interface ApiResponse {
   status: number;
@@ -146,7 +147,6 @@ interface ApiMapReportsResponse {
   reportes: ApiMapReport[];
 }
 
-const MACAPA_BOUNDS: [number, number, number, number] = [-51.2, -0.1, -50.9, 0.2];
 const EMPTY_REPORT_IMAGE =
   'UklGRkoAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAwAAAARBxAR/Q9ERP8DAABWUDggGAAAABQBAJ0BKgEAAQAAAP4AAA3AAP7mtQAAAA==';
 
@@ -431,4 +431,230 @@ export async function deleteMapReport(id: number | string, jwt?: string) {
     };
   }
   return response;
+}
+
+/* ------------------------------------------------------------------ */
+/* H3 heatmap — /heatmap/geral + /heatmap/ranking                       */
+/* ------------------------------------------------------------------ */
+
+export interface HeatmapBoundsInput {
+  lon1: number;
+  lat1: number;
+  lon2: number;
+  lat2: number;
+  resolucao: number;
+  categoria?: number;
+}
+
+export interface HeatmapCell {
+  /** Decimal H3 index as string (precision-safe: exceeds MAX_SAFE_INTEGER). */
+  h3_id: string;
+  h3_qtd: number;
+  /** Dominant category (ranking mode). Backend index 0-9. */
+  categoria?: number;
+}
+
+export interface HeatmapResult {
+  heatmap: HeatmapCell[];
+  qtd: number;
+  /** First cell's raw keys — client logs these to diagnose shape drift. */
+  sampleKeys: string[];
+}
+
+interface RawHeatmapResult {
+  status: number;
+  ok: boolean;
+  raw: string;
+}
+
+function executeHeatmapRawRequest(
+  baseUrl: string,
+  path: string,
+  method: string,
+  body?: unknown,
+): Promise<RawHeatmapResult> {
+  // GET-with-body via node http/https (global fetch rejects GET bodies).
+  // Mirrors executeRawRequest's GET branch but returns raw text so h3_id
+  // integers (uint64, beyond MAX_SAFE_INTEGER) can be preserved as strings.
+  return new Promise((resolve) => {
+    try {
+      const payload = body === undefined ? undefined : JSON.stringify(body);
+      const urlString = `${baseUrl}${path}`;
+      const parsedUrl = new URL(urlString);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
+
+      const req = client.request(
+        urlString,
+        {
+          method,
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+          },
+        },
+        (res) => {
+          let responseData = '';
+          res.on('data', (chunk) => (responseData += chunk));
+          res.on('end', () => {
+            const status = res.statusCode || 500;
+            resolve({ status, ok: status >= 200 && status < 300, raw: responseData });
+          });
+        }
+      );
+
+      req.setTimeout(10000, () => {
+        req.destroy(new Error('Tempo esgotado ao contatar o servidor.'));
+      });
+      req.on('timeout', () => {
+        resolve({ status: 500, ok: false, raw: 'Tempo esgotado ao contatar o servidor.' });
+      });
+      req.on('error', (error) => resolve({ status: 500, ok: false, raw: error.message }));
+      if (payload) req.write(payload);
+      req.end();
+    } catch (error: unknown) {
+      resolve({
+        status: 500,
+        ok: false,
+        raw: error instanceof Error ? error.message : 'Erro ao inicializar requisição.',
+      });
+    }
+  });
+}
+
+/**
+ * Parse heatmap JSON while keeping h3_id exact. The backend emits
+ * `"h3_id":583224947837501439` (uint64 > MAX_SAFE_INTEGER), which
+ * JSON.parse would round — rewrite h3-ish id tokens to strings first.
+ * Accepts envelope variants ({heatmap}, {data}, {cells}, bare array,
+ * or an object map keyed by h3 id) and per-cell key aliases, since the
+ * ranking shape is backend-defined and has drifted before.
+ */
+function parseHeatmapPayload(raw: string): HeatmapResult {
+  // Preserve precision for any long integer under an h3-ish key. Counts
+  // (small ints) are intentionally left numeric.
+  const sanitized = raw.replace(
+    /"(h3_id|h3|h3_index|cell|cell_id)"\s*:\s*(-?\d{10,})/g,
+    '"$1":"$2"'
+  );
+  const data: unknown = JSON.parse(sanitized);
+  let list: unknown[] = [];
+  if (Array.isArray(data)) {
+    list = data;
+  } else if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    const envelope = obj.heatmap ?? obj.data ?? obj.cells ?? obj.result;
+    if (Array.isArray(envelope)) {
+      list = envelope;
+    } else if (envelope && typeof envelope === 'object' && !Array.isArray(envelope)) {
+      // Object map form: { "<h3_id>": {qtd, categoria} } or { "<h3_id>": 5 }.
+      list = Object.entries(envelope as Record<string, unknown>).map(([key, value]) => {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          return { h3_id: key, ...(value as Record<string, unknown>) };
+        }
+        return { h3_id: key, h3_qtd: value };
+      });
+    }
+  } else {
+    throw new Error('Resposta de heatmap inválida.');
+  }
+  const cells: HeatmapCell[] = [];
+  let sampleKeys: string[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    if (sampleKeys.length === 0) sampleKeys = Object.keys(row).slice(0, 12);
+    const rawId = row.h3_id ?? row.h3 ?? row.h3_index ?? row.cell ?? row.cell_id ?? row.index ?? row.id;
+    const id =
+      typeof rawId === 'string' && /^-?\d+$/.test(rawId.trim())
+        ? rawId.trim()
+        : typeof rawId === 'number' && Number.isFinite(rawId)
+          ? String(Math.trunc(rawId))
+          : null;
+    if (!id) continue;
+    const countRaw =
+      row.h3_qtd ?? row.qtd ?? row.count ?? row.total ?? row.value ?? row.h3_count;
+    const count = typeof countRaw === 'number' && Number.isFinite(countRaw)
+      ? Math.max(0, Math.trunc(countRaw))
+      : typeof countRaw === 'string' && /^\d+$/.test(countRaw.trim())
+        ? parseInt(countRaw.trim(), 10)
+        : 0;
+    // Ranking winner field name is backend-defined; accept aliases.
+    const winnerRaw =
+      row.categoria ??
+      row.categoria_destaque ??
+      row.cat ??
+      row.destaque ??
+      row.dominant ??
+      row.dominante ??
+      row.top_categoria ??
+      row.vencedora ??
+      row.winner;
+    const winner =
+      typeof winnerRaw === 'number' && Number.isInteger(winnerRaw)
+        ? winnerRaw
+        : typeof winnerRaw === 'string' && /^-?\d+$/.test(winnerRaw.trim())
+          ? parseInt(winnerRaw.trim(), 10)
+          : undefined;
+    cells.push({
+      h3_id: id,
+      h3_qtd: count,
+      ...(winner === undefined ? {} : { categoria: winner }),
+    });
+  }
+  const totalRaw =
+    data && typeof data === 'object' && !Array.isArray(data)
+      ? (data as Record<string, unknown>).qtd ?? (data as Record<string, unknown>).total
+      : undefined;
+  const qtd = typeof totalRaw === 'number' && Number.isFinite(totalRaw)
+    ? Math.trunc(totalRaw)
+    : cells.length;
+  return { heatmap: cells, qtd, sampleKeys };
+}
+
+async function requestHeatmap(
+  path: '/heatmap/geral' | '/heatmap/ranking',
+  body: HeatmapBoundsInput,
+): Promise<HeatmapResult> {
+  const attempts: Array<{ base: string; method: string }> = [
+    { base: PRIMARY_API_BASE_URL, method: 'GET' },
+  ];
+  if (PRIMARY_API_BASE_URL !== FALLBACK_API_BASE_URL) {
+    attempts.push({ base: FALLBACK_API_BASE_URL, method: 'GET' });
+  }
+  let lastError = 'Não foi possível carregar o heatmap.';
+  for (const attempt of attempts) {
+    let result = await executeHeatmapRawRequest(attempt.base, path, attempt.method, body);
+    if (!result.ok) {
+      // Some proxies strip GET bodies: retry as POST before failing over.
+      const retry = await executeHeatmapRawRequest(attempt.base, path, 'POST', body);
+      if (retry.ok) result = retry;
+    }
+    if (!result.ok) {
+      lastError = result.raw || lastError;
+      if (isConnectionError(result.raw) || result.status === 500) continue;
+      throw new Error(typeof result.raw === 'string' && result.raw.trim() ? result.raw : lastError);
+    }
+    try {
+      return parseHeatmapPayload(result.raw);
+    } catch {
+      lastError = 'A API retornou um heatmap em formato inválido.';
+      continue;
+    }
+  }
+  throw new Error(lastError);
+}
+
+export async function getHeatmapGeral(
+  input: HeatmapBoundsInput,
+): Promise<HeatmapResult> {
+  return requestHeatmap('/heatmap/geral', input);
+}
+
+export async function getHeatmapRanking(
+  input: Omit<HeatmapBoundsInput, 'categoria'>,
+): Promise<HeatmapResult> {
+  const { categoria: _omitted, ...body } = input as HeatmapBoundsInput;
+  void _omitted;
+  return requestHeatmap('/heatmap/ranking', body);
 }

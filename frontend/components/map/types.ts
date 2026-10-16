@@ -129,6 +129,14 @@ export const CATEGORIES: Record<ReportCategory, CategoryInfo> = {
 export const REPORT_IMAGE_CDN = 'https://urbalycdn.gabrielataide.com';
 
 /**
+ * Quadro bounds used by `/reportes/quadro` ([west, south, east, north]).
+ * Shared with the map client so the H3 heatmap fetches exactly the same
+ * dataset the pins render. Lives here (not in `app/actions/api.ts`)
+ * because `use server` modules may only export async functions.
+ */
+export const MACAPA_BOUNDS: [number, number, number, number] = [-51.2, -0.1, -50.9, 0.2];
+
+/**
  * Backend `categoria` is the index into this order (0-9). 9 and out-of-range
  * map to 'other' so unknown categories degrade instead of mislabeling.
  */

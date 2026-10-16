@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
-import { createMapReport, getMapReports } from '@/app/actions/api';
+import { createMapReport, getHeatmapGeral, getHeatmapRanking, getMapReports } from '@/app/actions/api';
 import { useAuth } from '@/lib/auth-context';
 import { AnimatePresence } from 'motion/react';
 import { INITIAL_REPORTS } from '@/data/mock-reports';
@@ -22,9 +22,24 @@ import {
   CATEGORY_ORDER,
   categoryFromApi,
   categoryToApi,
+  MACAPA_BOUNDS,
   REPORT_IMAGE_CDN,
 } from './types';
+import type { HeatmapBoundsInput, HeatmapCell } from '@/app/actions/api';
 import { MapAccountButton, MapBasemapButton, MapFilterButton, MapIconRail, MapSearchCard } from './map-shell';
+import {
+  ensureH3Layers,
+  h3CellsToGeoJSON,
+  H3_FILL_LAYER_ID,
+  H3_RANKING_HEX,
+  padView,
+  removeH3Layers,
+  resolveH3Res,
+  setH3Data,
+  type H3Mode,
+  type H3ResSetting,
+  type H3View,
+} from './h3-layer';
 import { ReportWizardSheet } from './report-wizard-card';
 import { ReportDetailsPanel } from './report-details-panel';
 import {
@@ -58,6 +73,81 @@ function formatCount(value: number): string {
 const DEFAULT_CENTER: [number, number] = [-51.065, 0.035];
 const DEFAULT_ZOOM = 13;
 
+// H3 response cache: pans/zooms revisit the same quantized viewports, and
+// toggling mode/res back and forth would otherwise refetch every time.
+// TTL keeps long sessions from going stale. Module-level so retries and
+// remounts share it.
+const H3_CACHE_TTL_MS = 90_000;
+const H3_CACHE_MAX_ENTRIES = 40;
+const h3ResponseCache = new globalThis.Map<
+  string,
+  { at: number; cells: HeatmapCell[]; sampleKeys: string[] }
+>();
+
+function readH3Cache(key: string): { cells: HeatmapCell[]; sampleKeys: string[] } | null {
+  const entry = h3ResponseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > H3_CACHE_TTL_MS) {
+    h3ResponseCache.delete(key);
+    return null;
+  }
+  // Refresh recency.
+  h3ResponseCache.delete(key);
+  h3ResponseCache.set(key, entry);
+  return { cells: entry.cells, sampleKeys: entry.sampleKeys };
+}
+
+function writeH3Cache(key: string, cells: HeatmapCell[], sampleKeys: string[]): void {
+  h3ResponseCache.set(key, { at: Date.now(), cells, sampleKeys });
+  while (h3ResponseCache.size > H3_CACHE_MAX_ENTRIES) {
+    const oldest = h3ResponseCache.keys().next();
+    if (oldest.done) break;
+    h3ResponseCache.delete(oldest.value);
+  }
+}
+
+/**
+ * Client-side ranking fallback: when /heatmap/ranking returns cells with no
+ * usable winner field, derive dominance locally from per-category
+ * /heatmap/geral counts (winner = argmax, qtd = total). Uses the proven
+ * geral endpoint, so ranking always has an answer.
+ */
+async function computeRankingFromGeral(
+  body: Omit<HeatmapBoundsInput, 'categoria'>
+): Promise<{ cells: HeatmapCell[]; sampleKeys: string[] }> {
+  const settled = await Promise.all(
+    CATEGORY_ORDER.map((cat) =>
+      getHeatmapGeral({ ...body, categoria: categoryToApi(cat) })
+        .then((res) => ({ cat, res }))
+        .catch(() => null)
+    )
+  );
+  const acc = new globalThis.Map<string, { total: number; best: number; bestCat: number }>();
+  let sampleKeys: string[] = [];
+  for (const item of settled) {
+    if (!item) continue;
+    if (sampleKeys.length === 0) sampleKeys = item.res.sampleKeys;
+    const catApi = categoryToApi(item.cat);
+    for (const cell of item.res.heatmap) {
+      const prev = acc.get(cell.h3_id) ?? { total: 0, best: -1, bestCat: catApi };
+      prev.total += cell.h3_qtd;
+      if (cell.h3_qtd > prev.best) {
+        prev.best = cell.h3_qtd;
+        prev.bestCat = catApi;
+      }
+      acc.set(cell.h3_id, prev);
+    }
+  }
+  return {
+    cells: [...acc.entries()].map(([h3_id, v]) => ({
+      h3_id,
+      h3_qtd: v.total,
+      categoria: v.bestCat,
+    })),
+    sampleKeys,
+  };
+}
+
 // External snapshots read after hydration (never during render on the
 // server) so SSR and the first client render always agree. `useState`
 // initializers and mount effects that read window/localStorage caused
@@ -85,12 +175,72 @@ function getUrlQuery(): string {
   }
 }
 
-function getUrlCategory(): ReportCategory | 'all' {
+const EMPTY_CATEGORIES: ReportCategory[] = [];
+
+let cachedCategoriesSearch: string | null = null;
+let cachedCategories: ReportCategory[] = EMPTY_CATEGORIES;
+
+function getUrlCategories(): ReportCategory[] {
+  // useSyncExternalStore requires a cached snapshot: returning a fresh
+  // array per call trips "getServerSnapshot should be cached" and loops.
+  // Cache by query string (subscribe is a noop; URL changes remount state
+  // through the draft or a navigation re-render with a new search key).
   try {
-    const raw = new URLSearchParams(window.location.search).get('categoria');
-    return raw && (CATEGORY_ORDER as string[]).includes(raw) ? (raw as ReportCategory) : 'all';
+    const search = window.location.search;
+    if (search === cachedCategoriesSearch) return cachedCategories;
+    const raw = new URLSearchParams(search).get('categoria');
+    if (!raw) {
+      cachedCategoriesSearch = search;
+      cachedCategories = EMPTY_CATEGORIES;
+      return cachedCategories;
+    }
+    const valid = raw
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => (CATEGORY_ORDER as string[]).includes(part)) as ReportCategory[];
+    // De-dupe while preserving CATEGORY_ORDER order.
+    const result = CATEGORY_ORDER.filter((cat) => valid.includes(cat));
+    cachedCategoriesSearch = search;
+    cachedCategories = result.length === 0 ? EMPTY_CATEGORIES : result;
+    return cachedCategories;
   } catch {
-    return 'all';
+    return cachedCategories;
+  }
+}
+
+function getStoredH3Enabled(): boolean {
+  try {
+    return window.localStorage.getItem('urbaly-h3-enabled') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function getStoredH3Mode(): H3Mode {
+  try {
+    const raw = window.localStorage.getItem('urbaly-h3-mode');
+    return raw === 'ranking' ? 'ranking' : 'geral';
+  } catch {
+    return 'geral';
+  }
+}
+
+function getStoredH3Res(): H3ResSetting {
+  try {
+    const raw = window.localStorage.getItem('urbaly-h3-res');
+    if (raw === 'auto') return 'auto';
+    const num = Number(raw);
+    return Number.isInteger(num) && num >= 1 && num <= 10 ? (num as H3ResSetting) : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+function getStoredH3ShowEmpty(): boolean {
+  try {
+    return window.localStorage.getItem('urbaly-h3-empty') === '1';
+  } catch {
+    return false;
   }
 }
 
@@ -365,23 +515,30 @@ export default function Map() {
     }
   }, []);
 
-  // Search and filter state (Google Maps-style pills). Persisted URL values
-  // come from a hydration-safe external store; keystrokes live in drafts.
+  // Search and multi-category filter state (Google Maps-style pills).
+  // Persisted URL values come from a hydration-safe external store;
+  // keystrokes and picks made this session live in drafts. Empty selection
+  // means "Todas" (no filter). Legacy single `?categoria=x` URLs still parse.
   const persistedQuery = React.useSyncExternalStore(subscribeNoop, getUrlQuery, () => '');
-  const persistedCategory = React.useSyncExternalStore(
+  const persistedCategories = React.useSyncExternalStore(
     subscribeNoop,
-    getUrlCategory,
-    () => 'all' as ReportCategory | 'all'
+    getUrlCategories,
+    () => EMPTY_CATEGORIES
   );
   const [queryDraft, setQueryDraft] = React.useState<string | null>(null);
-  const [categoryDraft, setCategoryDraft] = React.useState<ReportCategory | 'all' | null>(null);
+  const [categoryDraft, setCategoryDraft] = React.useState<ReportCategory[] | null>(null);
   const searchQuery = queryDraft ?? persistedQuery;
-  const selectedCategory = categoryDraft ?? persistedCategory;
+  const selectedCategories = categoryDraft ?? persistedCategories;
   const setSearchQuery = React.useCallback((value: string) => setQueryDraft(value), []);
-  const setSelectedCategory = React.useCallback(
-    (value: ReportCategory | 'all') => setCategoryDraft(value),
-    []
-  );
+  const toggleCategory = React.useCallback((category: ReportCategory) => {
+    const base = categoryDraft ?? persistedCategories;
+    setCategoryDraft(
+      base.includes(category)
+        ? base.filter((cat) => cat !== category)
+        : [...base, category]
+    );
+  }, [categoryDraft, persistedCategories]);
+  const clearCategories = React.useCallback(() => setCategoryDraft([]), []);
 
   // Keep the query + filters in the URL (shareable, back-button safe).
   React.useEffect(() => {
@@ -389,16 +546,17 @@ export default function Map() {
     const params = new URLSearchParams(window.location.search);
     if (searchQuery.trim()) params.set('q', searchQuery.trim());
     else params.delete('q');
-    if (selectedCategory !== 'all') params.set('categoria', selectedCategory);
+    if (selectedCategories.length > 0) params.set('categoria', selectedCategories.join(','));
     else params.delete('categoria');
     const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
     window.history.replaceState(null, '', next);
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategories]);
 
   // Filter reports reactively
   const filteredReports = React.useMemo(() => {
     return reports.filter((report) => {
-      const matchesCategory = selectedCategory === 'all' || report.category === selectedCategory;
+      const matchesCategory =
+        selectedCategories.length === 0 || selectedCategories.includes(report.category);
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -409,10 +567,10 @@ export default function Map() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [reports, selectedCategory, searchQuery]);
+  }, [reports, selectedCategories, searchQuery]);
 
   const hasActiveFilters =
-    selectedCategory !== 'all' || searchQuery.trim().length > 0;
+    selectedCategories.length > 0 || searchQuery.trim().length > 0;
 
   // All filtered reports mount markers — including off-viewport ones — so
   // panning never pops pins in late and the pins always match the legend
@@ -486,6 +644,339 @@ export default function Map() {
       // Private-mode storage failure: the choice still applies this session.
     }
   }, []);
+
+  /* ---------------------------------------------------------------- */
+  /* H3 heatmap layer — toggle lives on top of the Layers menu.        */
+  /* Off by default, remembered in localStorage like the basemap.      */
+  /* ---------------------------------------------------------------- */
+  const persistedH3Enabled = React.useSyncExternalStore(
+    subscribeNoop,
+    getStoredH3Enabled,
+    () => false
+  );
+  const persistedH3Mode = React.useSyncExternalStore(
+    subscribeNoop,
+    getStoredH3Mode,
+    () => 'geral' as H3Mode
+  );
+  const persistedH3Res = React.useSyncExternalStore(
+    subscribeNoop,
+    getStoredH3Res,
+    () => 'auto' as H3ResSetting
+  );
+  const persistedH3ShowEmpty = React.useSyncExternalStore(
+    subscribeNoop,
+    getStoredH3ShowEmpty,
+    () => false
+  );
+  const [h3EnabledDraft, setH3EnabledDraft] = React.useState<boolean | null>(null);
+  const [h3ModeDraft, setH3ModeDraft] = React.useState<H3Mode | null>(null);
+  const [h3ResDraft, setH3ResDraft] = React.useState<H3ResSetting | null>(null);
+  const [h3ShowEmptyDraft, setH3ShowEmptyDraft] = React.useState<boolean | null>(null);
+  const h3Enabled = h3EnabledDraft ?? persistedH3Enabled;
+  const h3Mode = h3ModeDraft ?? persistedH3Mode;
+  const h3Res = h3ResDraft ?? persistedH3Res;
+  const h3ShowEmpty = h3ShowEmptyDraft ?? persistedH3ShowEmpty;
+
+  const handleH3Toggle = React.useCallback(() => {
+    setH3EnabledDraft((previous) => {
+      const current = previous ?? getStoredH3Enabled();
+      const next = !current;
+      try {
+        window.localStorage.setItem('urbaly-h3-enabled', next ? '1' : '0');
+      } catch {
+        // Private-mode storage failure: still applies this session.
+      }
+      return next;
+    });
+  }, []);
+  const handleH3ModeChange = React.useCallback((mode: H3Mode) => {
+    setH3ModeDraft(mode);
+    try {
+      window.localStorage.setItem('urbaly-h3-mode', mode);
+    } catch {
+      // Ignored — see above.
+    }
+  }, []);
+  const handleH3ResChange = React.useCallback((res: H3ResSetting) => {
+    setH3ResDraft(res);
+    try {
+      window.localStorage.setItem('urbaly-h3-res', String(res));
+    } catch {
+      // Ignored — see above.
+    }
+  }, []);
+  const handleH3ToggleEmpty = React.useCallback(() => {
+    setH3ShowEmptyDraft((previous) => {
+      const current = previous ?? getStoredH3ShowEmpty();
+      const next = !current;
+      try {
+        window.localStorage.setItem('urbaly-h3-empty', next ? '1' : '0');
+      } catch {
+        // Private-mode storage failure: still applies this session.
+      }
+      return next;
+    });
+  }, []);
+
+  const [h3Cells, setH3Cells] = React.useState<HeatmapCell[]>([]);
+  const [h3SampleKeys, setH3SampleKeys] = React.useState<string[]>([]);
+  // Last successfully covered viewport (clamped to the pins' quadro bounds)
+  // — drives the "empty cells" fill without refetching.
+  const [h3LastView, setH3LastView] = React.useState<H3View | null>(null);
+  const [h3Loading, setH3Loading] = React.useState(false);
+  const [h3Error, setH3Error] = React.useState<string | null>(null);
+  const [h3RetryKey, setH3RetryKey] = React.useState(0);
+  const [h3ViewportKey, setH3ViewportKey] = React.useState(0);
+  const h3RequestRef = React.useRef(0);
+
+  const handleH3Retry = React.useCallback(() => {
+    setH3Error(null);
+    setH3RetryKey((value) => value + 1);
+  }, []);
+
+  // Track viewport moves so the heatmap refetches for the visible bbox.
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapInstance) return;
+    let debounce: number | null = null;
+    const bump = () => {
+      if (debounce) window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => setH3ViewportKey((value) => value + 1), 500);
+    };
+    map.on('moveend', bump);
+    map.on('zoomend', bump);
+    return () => {
+      if (debounce) window.clearTimeout(debounce);
+      map.off('moveend', bump);
+      map.off('zoomend', bump);
+    };
+  }, [mapInstance]);
+
+  // Fetch heatmap cells for the current viewport when enabled.
+  // Responses are cached by quantized viewport + mode + res + categories,
+  // so panning back, toggling mode/res, or re-selecting filters is instant.
+  const selectedCategoriesKey = selectedCategories.join(',');
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!h3Enabled || !map || !mapInstance) return;
+    const requestId = h3RequestRef.current + 1;
+    h3RequestRef.current = requestId;
+    let cancelled = false;
+
+    const bounds = map.getBounds();
+    const resolucao = resolveH3Res(h3Res, map.getZoom());
+    // Full viewport drives the empty-cell grid (grid works everywhere);
+    // the fetch itself is clamped to the pins' quadro bounds
+    // (/reportes/quadro only loads pins inside MACAPA_BOUNDS — unclamped
+    // counts render cells that can never have a matching pin).
+    const view: H3View = {
+      w: +bounds.getWest().toFixed(3),
+      s: +bounds.getSouth().toFixed(3),
+      e: +bounds.getEast().toFixed(3),
+      n: +bounds.getNorth().toFixed(3),
+      res: resolucao,
+    };
+    // Track the viewport immediately so the empty grid renders even while
+    // counts load (or when the fetch fails) — grid must not depend on fetch.
+    setH3LastView(view);
+    const west = Math.max(view.w, MACAPA_BOUNDS[0]);
+    const south = Math.max(view.s, MACAPA_BOUNDS[1]);
+    const east = Math.min(view.e, MACAPA_BOUNDS[2]);
+    const north = Math.min(view.n, MACAPA_BOUNDS[3]);
+    if (west >= east || south >= north) {
+      // Viewport outside the data region: no counts, grid still renders.
+      setH3Cells([]);
+      setH3SampleKeys([]);
+      setH3Loading(false);
+      setH3Error(null);
+      return;
+    }
+    const body = {
+      lon1: +west.toFixed(3),
+      lat1: +south.toFixed(3),
+      lon2: +east.toFixed(3),
+      lat2: +north.toFixed(3),
+      resolucao,
+    };
+    // All categories selected == unfiltered: one request instead of N.
+    const effectiveCats =
+      selectedCategories.length >= CATEGORY_ORDER.length ? [] : selectedCategories;
+    const cacheKey = [
+      h3Mode,
+      body.resolucao,
+      body.lon1,
+      body.lat1,
+      body.lon2,
+      body.lat2,
+      h3Mode === 'ranking' ? '' : effectiveCats.join(','),
+    ].join('|');
+
+    const cached = readH3Cache(cacheKey);
+    if (cached) {
+      setH3Cells(cached.cells);
+      setH3SampleKeys(cached.sampleKeys);
+      setH3Loading(false);
+      setH3Error(null);
+      return;
+    }
+    setH3Loading(true);
+    setH3Error(null);
+
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          let cells: HeatmapCell[];
+          let sampleKeys: string[] = [];
+          if (h3Mode === 'ranking') {
+            const res = await getHeatmapRanking(body);
+            if (res.heatmap.some((cell) => cell.categoria !== undefined)) {
+              cells = res.heatmap;
+              sampleKeys = res.sampleKeys;
+            } else {
+              // Backend ranking carries no winner: derive it locally from
+              // per-category counts instead of rendering gray mush.
+              console.info(
+                '[Urbaly H3] ranking sem categoria dominante — calculando localmente via /heatmap/geral'
+              );
+              const computed = await computeRankingFromGeral(body);
+              cells = computed.cells;
+              sampleKeys = computed.sampleKeys;
+            }
+          } else if (effectiveCats.length === 0) {
+            const res = await getHeatmapGeral(body);
+            cells = res.heatmap;
+            sampleKeys = res.sampleKeys;
+          } else if (effectiveCats.length === 1) {
+            const res = await getHeatmapGeral({
+              ...body,
+              categoria: categoryToApi(effectiveCats[0]),
+            });
+            cells = res.heatmap;
+            sampleKeys = res.sampleKeys;
+          } else {
+            // Backend takes a scalar categoria: fan out one request per
+            // selected category and merge counts per cell.
+            const settled = await Promise.all(
+              effectiveCats.map((cat) =>
+                getHeatmapGeral({ ...body, categoria: categoryToApi(cat) })
+                  .then((res) => res)
+                  .catch(() => null)
+              )
+            );
+            const merged = new globalThis.Map<string, HeatmapCell>();
+            for (const res of settled) {
+              if (!res) continue;
+              if (sampleKeys.length === 0) sampleKeys = res.sampleKeys;
+              for (const cell of res.heatmap) {
+                const prev = merged.get(cell.h3_id);
+                merged.set(cell.h3_id, {
+                  h3_id: cell.h3_id,
+                  h3_qtd: (prev?.h3_qtd ?? 0) + cell.h3_qtd,
+                });
+              }
+            }
+            cells = [...merged.values()];
+          }
+          if (cancelled || h3RequestRef.current !== requestId) return;
+          writeH3Cache(cacheKey, cells, sampleKeys);
+          setH3Cells(cells);
+          setH3SampleKeys(sampleKeys);
+        } catch (error: unknown) {
+          if (cancelled || h3RequestRef.current !== requestId) return;
+          console.warn('[Urbaly H3] Heatmap fetch failed:', error);
+          setH3Error(
+            error instanceof Error && error.message.trim()
+              ? error.message.length > 90
+                ? 'Heatmap indisponível. Tente de novo.'
+                : error.message
+              : 'Heatmap indisponível. Tente de novo.'
+          );
+        } finally {
+          if (!cancelled && h3RequestRef.current === requestId) setH3Loading(false);
+        }
+      })();
+    }, 60);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // selectedCategoriesKey avoids re-running on array identity churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h3Enabled, h3Mode, h3Res, selectedCategoriesKey, mapInstance, h3ViewportKey, h3RetryKey]);
+
+  // Paint H3 source/layers; re-ensure after basemap setStyle swaps.
+  // h3Mode/isDark/h3GeoJSON are captured directly — the effect re-subscribes
+  // on every change so the styledata handler never goes stale.
+  const h3GeoJSON = React.useMemo(
+    () =>
+      h3CellsToGeoJSON(h3Cells, {
+        showEmpty: h3ShowEmpty,
+        view: h3LastView ? padView(h3LastView) : null,
+      }),
+    [h3Cells, h3ShowEmpty, h3LastView]
+  );
+  // Ranking without any winner category degrades to density paint so the
+  // layer never renders an all-gray mystery when the backend omits it.
+  const h3WinnerCount = React.useMemo(
+    () => h3Cells.reduce((n, cell) => n + (cell.categoria === undefined ? 0 : 1), 0),
+    [h3Cells]
+  );
+  const h3PaintMode: H3Mode =
+    h3Mode === 'ranking' && h3Cells.length > 0 && h3WinnerCount === 0 ? 'geral' : h3Mode;
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapInstance) return;
+    if (!h3Enabled) {
+      removeH3Layers(map);
+      return;
+    }
+    ensureH3Layers(map, h3PaintMode, isDark);
+    setH3Data(map, h3GeoJSON);
+    // setStyle (basemap/theme switch) drops custom layers: rebuild only when
+    // they are actually gone. styledata fires on every tile load, so an
+    // unconditional setData here repainted constantly (visible flicker).
+    const reapply = () => {
+      try {
+        if (map.getLayer(H3_FILL_LAYER_ID)) return;
+      } catch {
+        // Layer query failed — fall through and rebuild below.
+      }
+      if (ensureH3Layers(map, h3PaintMode, isDark)) {
+        setH3Data(map, h3GeoJSON);
+      }
+    };
+    map.on('styledata', reapply);
+    return () => {
+      map.off('styledata', reapply);
+    };
+  }, [mapInstance, h3Enabled, h3GeoJSON, h3PaintMode, isDark]);
+
+  // Winner categories present (ranking legend dots).
+  const h3Winners = React.useMemo(() => {
+    if (h3Mode !== 'ranking') return [];
+    const seen = new globalThis.Map<string, number>();
+    for (const cell of h3Cells) {
+      if (cell.categoria === undefined) continue;
+      seen.set(categoryFromApi(cell.categoria), (seen.get(categoryFromApi(cell.categoria)) ?? 0) + cell.h3_qtd);
+    }
+    return [...seen.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [h3Cells, h3Mode]);
+
+  // One-line diagnosis per payload shape: open devtools and paste this line
+  // if ranking ever looks wrong — it shows exactly what the backend sent.
+  const loggedH3ShapeRef = React.useRef('');
+  React.useEffect(() => {
+    if (!h3Enabled || h3Cells.length === 0) return;
+    const shape = `${h3Mode}|${h3SampleKeys.join(',')}`;
+    if (loggedH3ShapeRef.current === shape) return;
+    loggedH3ShapeRef.current = shape;
+    console.info(
+      `[Urbaly H3] mode=${h3Mode} cells=${h3Cells.length} ` +
+        `withWinner=${h3WinnerCount} sampleKeys=${h3SampleKeys.join(',') || '(none)'}`
+    );
+  }, [h3Enabled, h3Mode, h3Cells.length, h3WinnerCount, h3SampleKeys]);
 
   // Public runtime config served by /api/public-config. The CARTO key is
   // fallback-only now: the map boots immediately on keyless OpenFreeMap and
@@ -590,7 +1081,7 @@ export default function Map() {
         },
         center: [...DEFAULT_CENTER] as [number, number],
         zoom: DEFAULT_ZOOM,
-        maxZoom: 18,
+        maxZoom: 20,
         minZoom: 9,
       });
     } catch (constructionError) {
@@ -1173,8 +1664,9 @@ export default function Map() {
               rightSlot={
                 <>
                   <MapFilterButton
-                    selectedCategory={selectedCategory}
-                    onCategoryChange={setSelectedCategory}
+                    selected={selectedCategories}
+                    onToggleCategory={toggleCategory}
+                    onClear={clearCategories}
                     categoryCounts={categoryCounts}
                   />
                   {/* Mobile keeps the account inside the search card like the Maps app */}
@@ -1324,6 +1816,19 @@ export default function Map() {
               options={basemapOptions}
               value={effectiveBasemap}
               onChange={handleBasemapChange}
+              h3={{
+                enabled: h3Enabled,
+                mode: h3Mode,
+                res: h3Res,
+                showEmpty: h3ShowEmpty,
+                isLoading: h3Loading,
+                error: h3Error,
+                onToggle: handleH3Toggle,
+                onModeChange: handleH3ModeChange,
+                onResChange: handleH3ResChange,
+                onToggleEmpty: handleH3ToggleEmpty,
+                onRetry: handleH3Retry,
+              }}
             />
 
             {/* Report count legend with label */}
@@ -1338,6 +1843,71 @@ export default function Map() {
                 <span className="leading-tight">{filteredReports.length === 1 ? 'reporte no mapa' : 'reportes no mapa'}</span>
               </div>
             </div>
+
+            {/* H3 legend — only while the heatmap is on */}
+            {h3Enabled ? (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-label={
+                  h3PaintMode === 'ranking'
+                    ? `Heatmap por categoria dominante, ${h3Cells.length} células`
+                    : `Heatmap de densidade, ${h3Cells.length} células`
+                }
+                className="flex max-w-[calc(100vw-6rem)] flex-wrap items-center gap-x-2.5 gap-y-1 rounded-full border border-border/80 bg-background/90 py-1.5 pl-3.5 pr-3.5 font-sans text-[11px] backdrop-blur-md dark:bg-zinc-900/90"
+              >
+                {h3Loading && h3Cells.length === 0 ? (
+                  <span className="text-muted-foreground">Carregando heatmap…</span>
+                ) : h3PaintMode === 'geral' ? (
+                  <>
+                    <span
+                      aria-hidden
+                      className="h-2 w-16 shrink-0 rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(to right, #fef08a, #fdba74, #fb7185, #dc2626)',
+                      }}
+                    />
+                    <span className="text-muted-foreground">Pouco</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span className="text-muted-foreground">Muito</span>
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {formatCount(h3Cells.length)} {h3Cells.length === 1 ? 'célula' : 'células'}
+                    </span>
+                    {h3Mode === 'ranking' ? (
+                      <span
+                        className="text-muted-foreground"
+                        title="O ranking não trouxe categoria dominante — mostrando densidade"
+                      >
+                        (ranking sem categoria)
+                      </span>
+                    ) : null}
+                  </>
+                ) : h3Winners.length === 0 ? (
+                  <span className="text-muted-foreground">
+                    Sem células nesta vista ({formatCount(h3Cells.length)})
+                  </span>
+                ) : (
+                  <>
+                    {h3Winners.map(([cat]) => (
+                      <span key={cat} className="flex items-center gap-1 text-muted-foreground">
+                        <span
+                          aria-hidden
+                          className="size-2.5 shrink-0 rounded-sm"
+                          style={{
+                            backgroundColor:
+                              H3_RANKING_HEX[cat as ReportCategory] ?? '#64748b',
+                          }}
+                        />
+                        <span className="leading-tight">
+                          {CATEGORIES[cat as ReportCategory]?.label ?? cat}
+                        </span>
+                      </span>
+                    ))}
+                  </>
+                )}
+              </div>
+            ) : null}
           </div>
 
           {/* Empty state hint */}
@@ -1361,7 +1931,7 @@ export default function Map() {
                     onClick={() => {
                       if (hasActiveFilters) {
                         setSearchQuery('');
-                        setSelectedCategory('all');
+                        clearCategories();
                       } else {
                         setIsPlacementMode(true);
                       }

@@ -7,6 +7,7 @@ import {
   BarChart3,
   Building2,
   Check,
+  Hexagon,
   Home,
   Info,
   Layers,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -45,6 +47,8 @@ import {
 import { CATEGORIES, CATEGORY_ORDER, type ReportCategory } from './types';
 import { CategoryIcon } from './category-icon';
 import type { BasemapId, BasemapOption } from './google-maps-style';
+import type { H3Mode, H3ResSetting } from './h3-layer';
+import AnimatedToggle from '@/components/ui/smoothui/animated-toggle';
 
 export type MapNavItem = {
   label: string;
@@ -218,28 +222,52 @@ const BASEMAP_THEME_ICONS: Record<BasemapId, BasemapThemeIcon> = {
   fiord: Waves,
 };
 
+export interface H3ControlState {
+  enabled: boolean;
+  mode: H3Mode;
+  res: H3ResSetting;
+  showEmpty: boolean;
+  isLoading: boolean;
+  error: string | null;
+  onToggle: () => void;
+  onModeChange: (mode: H3Mode) => void;
+  onResChange: (res: H3ResSetting) => void;
+  onToggleEmpty: () => void;
+  onRetry: () => void;
+}
+
+const H3_RES_OPTIONS: H3ResSetting[] = ['auto', 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
 export function MapBasemapButton({
   options,
   value,
   onChange,
+  h3,
 }: {
   options: BasemapOption[];
   value: BasemapId;
   onChange: (basemap: BasemapId) => void;
+  h3?: H3ControlState;
 }) {
   const active = options.find((option) => option.id === value) ?? options[0];
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={`Estilo do mapa: ${active.label}. Trocar estilo do mapa`}
+        aria-label={`Estilo do mapa: ${active.label}. Trocar estilo do mapa${h3?.enabled ? ' (heatmap H3 ativo)' : ''}`}
         title={`Estilo do mapa: ${active.label}`}
-        className="flex size-11 cursor-pointer touch-manipulation items-center justify-center rounded-full border border-border bg-card text-[#333] transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted dark:[&_svg]:invert"
+        className="relative flex size-11 cursor-pointer touch-manipulation items-center justify-center rounded-full border border-border bg-card text-[#333] transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted dark:[&_svg]:invert"
       >
         {/* Lucide "layers": same library as the rest of the app, sized to
             the actually-rendered Find-my-location ink (~26px, see map.tsx),
             same #333 sprite color (inverted in dark, like the native icon). */}
         <Layers className="size-7" strokeWidth={3} />
+        {h3?.enabled ? (
+          <span
+            aria-hidden
+            className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-card bg-primary"
+          />
+        ) : null}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
@@ -248,6 +276,123 @@ export function MapBasemapButton({
         sideOffset={8}
         className="w-[min(17rem,calc(100vw-2rem))] rounded-xl border-border/70 p-1.5 shadow-md"
       >
+        {h3 ? (
+          <>
+            <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
+              Camadas
+            </DropdownMenuLabel>
+            {/* Plain div (not a menu item) so interacting never closes the menu. */}
+            <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <Hexagon className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium tracking-[-0.01em]">
+                  Heatmap H3
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {h3.isLoading
+                    ? 'Carregando hexágonos…'
+                    : h3.error
+                      ? 'Falha ao carregar'
+                      : h3.enabled
+                        ? h3.mode === 'ranking'
+                          ? 'Categoria dominante por célula'
+                          : 'Densidade de reportes'
+                        : 'Densidade por hexágonos'}
+                </span>
+              </span>
+              <AnimatedToggle
+                checked={h3.enabled}
+                onChange={h3.onToggle}
+                label="Ativar heatmap H3"
+              />
+            </div>
+
+            {h3.enabled ? (
+              <>
+                <div
+                  role="group"
+                  aria-label="Modo do heatmap"
+                  className="mx-1 mb-1 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+                >
+                  {(['geral', 'ranking'] as H3Mode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => h3.onModeChange(mode)}
+                      aria-pressed={h3.mode === mode}
+                      className={cn(
+                        'h-8 cursor-pointer rounded-md text-xs font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        h3.mode === mode
+                          ? 'bg-card text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {mode === 'geral' ? 'Geral' : 'Ranking'}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-1 px-2 pb-1.5 pt-0.5">
+                  <span className="mr-1 text-[11px] font-medium text-muted-foreground">
+                    Resolução
+                  </span>
+                  {H3_RES_OPTIONS.map((res) => (
+                    <button
+                      key={String(res)}
+                      type="button"
+                      onClick={() => h3.onResChange(res)}
+                      aria-pressed={h3.res === res}
+                      title={res === 'auto' ? 'Automática pelo zoom' : `H3 resolução ${res}`}
+                      className={cn(
+                        'h-7 min-w-7 cursor-pointer rounded-md px-1.5 text-[11px] font-semibold tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        h3.res === res
+                          ? 'bg-primary/10 text-foreground ring-1 ring-primary/30'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      {res === 'auto' ? 'Auto' : res}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <LayoutGrid className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium tracking-[-0.01em]">
+                      Células vazias
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      Mostra hexágonos sem reportes
+                    </span>
+                  </span>
+                  <AnimatedToggle
+                    checked={h3.showEmpty}
+                    onChange={h3.onToggleEmpty}
+                    label="Mostrar células vazias do heatmap"
+                  />
+                </div>
+                {h3.error ? (
+                  <div className="mx-1 mb-1 flex items-center gap-2 rounded-lg bg-destructive/10 px-2 py-2 text-[11px] text-destructive">
+                    <span className="min-w-0 flex-1 truncate" title={h3.error}>
+                      {h3.error}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={h3.onRetry}
+                      className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-[11px] font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Repetir
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            <DropdownMenuSeparator className="mx-1 mb-1" />
+          </>
+        ) : null}
+
         <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
           Estilo do mapa
         </DropdownMenuLabel>
@@ -391,18 +536,45 @@ export function MapAccountButton() {
   );
 }
 
-/* Unified category filter trigger — lives inside the search card. */
+/* Unified category filter trigger — lives inside the search card.
+   Multi-select: empty selection means "Todas". Checkbox rows keep the
+   menu open so several categories can be toggled in one pass. */
 export function MapFilterButton({
+  selected,
+  onToggleCategory,
+  onClear,
+  categoryCounts,
+  // Deprecated single-select props (kept so older callers still compile).
   selectedCategory,
   onCategoryChange,
-  categoryCounts,
 }: {
-  selectedCategory: ReportCategory | 'all';
-  onCategoryChange: (category: ReportCategory | 'all') => void;
+  selected?: ReportCategory[];
+  onToggleCategory?: (category: ReportCategory) => void;
+  onClear?: () => void;
   categoryCounts?: Record<ReportCategory, number>;
+  selectedCategory?: ReportCategory | 'all';
+  onCategoryChange?: (category: ReportCategory | 'all') => void;
 }) {
-  const hasActive = selectedCategory !== 'all';
-  const activeInfo = hasActive ? CATEGORIES[selectedCategory] : null;
+  const effectiveSelected: ReportCategory[] =
+    selected ??
+    (selectedCategory === undefined || selectedCategory === 'all' ? [] : [selectedCategory]);
+  const toggle: (category: ReportCategory) => void =
+    onToggleCategory ??
+    ((category) => {
+      if (!onCategoryChange) return;
+      onCategoryChange(
+        selectedCategory === category ? 'all' : category
+      );
+    });
+  const clear: () => void =
+    onClear ??
+    (() => {
+      onCategoryChange?.('all');
+    });
+  const hasActive = effectiveSelected.length > 0;
+  const activeLabels = hasActive
+    ? effectiveSelected.map((cat) => CATEGORIES[cat]?.label ?? cat).join(', ')
+    : null;
 
   return (
     <>
@@ -410,7 +582,7 @@ export function MapFilterButton({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={
-            hasActive && activeInfo ? `Filtro ativo: ${activeInfo.label}` : 'Filtrar por categoria'
+            hasActive && activeLabels ? `Filtros ativos: ${activeLabels}` : 'Filtrar por categoria'
           }
           className={cn(
             'relative inline-flex h-10 shrink-0 cursor-pointer touch-manipulation items-center gap-1.5 rounded-full px-2.5 text-xs font-medium outline-none transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[popup-open]:bg-muted',
@@ -419,6 +591,14 @@ export function MapFilterButton({
         >
           <SlidersHorizontal className="size-4 shrink-0" />
           <span className="hidden sm:inline">Filtrar</span>
+          {hasActive ? (
+            <span
+              aria-hidden
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold tabular-nums text-primary-foreground"
+            >
+              {effectiveSelected.length}
+            </span>
+          ) : null}
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
@@ -432,7 +612,7 @@ export function MapFilterButton({
           <DropdownMenuSeparator className="mx-1 mb-1" />
 
           <DropdownMenuItem
-            onClick={() => onCategoryChange('all')}
+            onClick={clear}
             className={cn(
               'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150',
               !hasActive && 'bg-accent/60'
@@ -456,11 +636,12 @@ export function MapFilterButton({
 
           {CATEGORY_ORDER.map((catKey) => {
             const info = CATEGORIES[catKey];
-            const isSelected = selectedCategory === catKey;
+            const isSelected = effectiveSelected.includes(catKey);
             return (
-              <DropdownMenuItem
+              <DropdownMenuCheckboxItem
                 key={catKey}
-                onClick={() => onCategoryChange(isSelected ? 'all' : catKey)}
+                checked={isSelected}
+                onCheckedChange={() => toggle(catKey)}
                 className={cn(
                   'flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150',
                   isSelected && 'bg-accent/60'
@@ -483,10 +664,20 @@ export function MapFilterButton({
                     {new Intl.NumberFormat('pt-BR').format(categoryCounts[catKey] ?? 0)}
                   </span>
                 ) : null}
-                {isSelected ? <Check className="size-4 shrink-0 text-primary" /> : null}
-              </DropdownMenuItem>
+              </DropdownMenuCheckboxItem>
             );
           })}
+          {hasActive ? (
+            <>
+              <DropdownMenuSeparator className="mx-1 mt-1" />
+              <DropdownMenuItem
+                onClick={clear}
+                className="flex cursor-pointer items-center justify-center rounded-lg px-2 py-2 text-[12px] font-semibold text-muted-foreground transition-colors duration-150 hover:text-foreground"
+              >
+                Limpar filtros ({effectiveSelected.length})
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </>
