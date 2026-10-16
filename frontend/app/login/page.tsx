@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { LoginForm } from "@/components/shadcn/login-form"
 
 export const metadata: Metadata = {
-  title: "Entrar | Urbaly",
+  title: "Entrar",
   description: "Acesse o Urbaly com sua conta Google.",
 }
 

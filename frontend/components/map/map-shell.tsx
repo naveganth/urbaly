@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -88,9 +89,16 @@ export function MapIconRail({ className }: { className?: string }) {
       <Link
         href="/"
         aria-label="Urbaly — início"
-        className="mb-2 flex size-11 items-center justify-center rounded-xl text-sm font-bold text-primary"
+        className="mb-2 flex size-11 items-center justify-center rounded-xl outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
       >
-        U
+        <Image
+          src="/UrbalySquareLogoTransparent.svg"
+          alt=""
+          width={28}
+          height={28}
+          priority
+          className="size-7"
+        />
       </Link>
 
       {MAP_NAV_ITEMS.map((item) => {
