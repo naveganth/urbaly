@@ -5,12 +5,13 @@ import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/lib/auth-context';
 import { PwaRegister } from '@/components/pwa-register';
+import { PwaInstallPrompt } from '@/components/pwa-install-prompt';
 
 import { REPORT_IMAGE_CDN } from '@/components/map/types';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Urbaly - Monitoramento Urbano do Amapá',
+    default: 'Urbaly - Monitoramento Urbano Colaborativo',
     template: '%s | Urbaly',
   },
   description:
@@ -79,12 +80,23 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
             start fetching the moment their src is assigned. */}
         <link rel='dns-prefetch' href={REPORT_IMAGE_CDN} />
         <link rel='preconnect' href={REPORT_IMAGE_CDN} crossOrigin='anonymous' />
+        {/* Capture the PWA install event before React hydrates: on repeat
+            visits Chrome can fire `beforeinstallprompt` within the first few
+            hundred ms, and a missed event is gone for the whole page load.
+            The PwaInstallPrompt component reads this stash on mount. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__urbalyInstallPrompt=e;});",
+          }}
+        />
       </head>
       <body className='min-h-screen bg-background text-foreground antialiased'>
         <ThemeProvider>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
         <PwaRegister />
+        <PwaInstallPrompt />
       </body>
     </html>
   );

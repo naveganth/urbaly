@@ -12,11 +12,14 @@ import type { MetadataRoute } from 'next';
  * theme_color is the light first-paint color (page background); the in-app
  * <meta name="theme-color"> swaps to the dark background via media query
  * (see `viewport` in app/layout.tsx).
+ *
+ * screenshots: install-dialog previews, listed in display order per form
+ * factor — the map leads, then the other main surfaces.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: '/',
-    name: 'Urbaly — Monitoramento Urbano do Amapá',
+    name: 'Urbaly - Monitoramento Urbano Colaborativo',
     short_name: 'Urbaly',
     description:
       'Plataforma colaborativa de monitoramento e análise de dados urbanos para o estado do Amapá. Acompanhe ocorrências e reporte problemas na sua rua.',
@@ -73,7 +76,49 @@ export default function manifest(): MetadataRoute.Manifest {
         icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       },
     ],
-    // Screenshots (install-dialog rich UI) are added once real captures exist;
-    // see the PWA rollout plan — they need the app running at 390x844 / 1280x800.
+    screenshots: [
+      {
+        src: '/screenshots/mapa-720x1600.png',
+        sizes: '720x1600',
+        type: 'image/png',
+        form_factor: 'narrow',
+        label: 'Mapa: reporte e explore problemas urbanos',
+      },
+      {
+        src: '/screenshots/classificacao-720x1600.png',
+        sizes: '720x1600',
+        type: 'image/png',
+        form_factor: 'narrow',
+        label: 'Classificação da comunidade',
+      },
+      {
+        src: '/screenshots/estatisticas-720x1600.png',
+        sizes: '720x1600',
+        type: 'image/png',
+        form_factor: 'narrow',
+        label: 'Estatísticas das ocorrências',
+      },
+      {
+        src: '/screenshots/mapa-1280x800.png',
+        sizes: '1280x800',
+        type: 'image/png',
+        form_factor: 'wide',
+        label: 'Mapa: reporte e explore problemas urbanos',
+      },
+      {
+        src: '/screenshots/classificacao-1280x800.png',
+        sizes: '1280x800',
+        type: 'image/png',
+        form_factor: 'wide',
+        label: 'Classificação da comunidade',
+      },
+      {
+        src: '/screenshots/estatisticas-1280x800.png',
+        sizes: '1280x800',
+        type: 'image/png',
+        form_factor: 'wide',
+        label: 'Estatísticas das ocorrências',
+      },
+    ],
   };
 }

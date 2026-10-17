@@ -23,7 +23,7 @@
  * the gap.
  */
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `urbaly-shell-${VERSION}`;
 const ASSET_CACHE = `urbaly-assets-${VERSION}`;
 const DATA_CACHE = `urbaly-data-${VERSION}`;
