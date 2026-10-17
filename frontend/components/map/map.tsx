@@ -302,6 +302,35 @@ class ResetViewControl implements maplibregl.IControl {
   };
 }
 
+/**
+ * Deterministic 64x64 canopy texture standing in for OpenFreeMap's missing
+ * `wood-pattern` sprite image (its dark style references the id, its sprite
+ * doesn't ship it). Base tone matches the style's own landcover fill
+ * (#202020) plus a faint speckle so wooded areas still render.
+ * See the setMissingStyleImageResolver call in the map-init effect.
+ */
+function generateWoodPattern(): { width: number; height: number; data: Uint8ClampedArray } {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return { width: 1, height: 1, data: new Uint8ClampedArray([0, 0, 0, 0]) };
+  ctx.fillStyle = '#202020';
+  ctx.fillRect(0, 0, size, size);
+  let seed = 0x5eed_2026;
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let i = 0; i < 220; i++) {
+    const x = Math.floor(rand() * size);
+    const y = Math.floor(rand() * size);
+    const shift = Math.floor(rand() * 14) - 7; // ±7 around #202020
+    ctx.fillStyle = `rgb(${32 + shift}, ${32 + shift}, ${32 + shift})`;
+    ctx.fillRect(x, y, 1 + Math.floor(rand() * 2), 1 + Math.floor(rand() * 2));
+  }
+  const image = ctx.getImageData(0, 0, size, size);
+  return { width: size, height: size, data: image.data };
+}
+
 export default function Map() {
   const { resolvedTheme } = useTheme();
   const { jwt, user } = useAuth();
@@ -1044,11 +1073,21 @@ export default function Map() {
     // Same-origin => loaded directly as a module worker.
     maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
+    // Largest canvas MapLibre may round up to. The default [4096, 4096]
+    // silently halves render resolution on large high-DPI screens; 8192
+    // covers 4K at 2x. Weaker GPUs stay safe: MapLibre re-clamps this to the
+    // real drawing-buffer size when `painter.overLimit()` trips.
+    let maxCanvasSize: [number, number] = [8192, 8192];
     // Fail fast without WebGL (some mobile browsers disable it).
     try {
       const probe = document.createElement('canvas');
       const gl = probe.getContext('webgl2') ?? probe.getContext('webgl');
       if (!gl) throw new Error('WebGL context unavailable');
+      const gpuLimit = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+      if (Number.isFinite(gpuLimit) && gpuLimit > 0) {
+        const cap = Math.min(gpuLimit, 8192);
+        maxCanvasSize = [cap, cap];
+      }
       // Release the probe context immediately; the map creates its own.
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     } catch (webglError) {
@@ -1083,6 +1122,7 @@ export default function Map() {
         zoom: DEFAULT_ZOOM,
         maxZoom: 20,
         minZoom: 3,
+        maxCanvasSize,
       });
     } catch (constructionError) {
       console.error('[Urbaly Map] Failed to construct the map:', constructionError);
@@ -1097,6 +1137,20 @@ export default function Map() {
     }
 
     mapRef.current = map;
+
+    // OpenFreeMap's dark style references `wood-pattern` for its wooded
+    // landcover layer, but its sprite doesn't ship the image — MapLibre logs
+    // "image ... could not be loaded" and skips the layer. The raw style
+    // boots before the repaint swap (which drops the pattern), so resolve
+    // the id on demand for any window where it's still referenced.
+    map.setMissingStyleImageResolver((id) => {
+      if (id !== 'wood-pattern') return;
+      try {
+        map.addImage(id, generateWoodPattern());
+      } catch {
+        // Duplicate id (style swapped mid-flight) — already resolved.
+      }
+    });
 
     // Upgrade the base style to the resolved basemap (Google repaint or
     // stock style) once it resolves. The map boots instantly on the base
@@ -1691,10 +1745,12 @@ export default function Map() {
           </div>
 
           {/* Entry localization prompt — soft ask, native request only on tap.
-              Reporting is gated on location (see handleReportClick). */}
+              Reporting is gated on location (see handleReportClick). Not a
+              dialog on purpose: it is non-modal and other surfaces (like the
+              PWA install card) check for open dialogs before appearing. */}
           {showGeoPrompt && !hasLocation && !mapError && (
             <div
-              role="dialog"
+              role="region"
               aria-live="polite"
               aria-label="Usar minha localização"
               className="absolute left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-[68px] z-20 mx-auto flex max-w-md flex-col gap-2.5 rounded-2xl border border-primary/30 bg-background/95 px-4 py-3.5 backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"

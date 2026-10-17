@@ -210,7 +210,14 @@ function patchLayer(layer: Record<string, unknown>, palette: GooglePalette): voi
     return;
   }
   if (id === 'landcover' || id.startsWith('park_') || id === 'park' || id === 'landuse_park' || id === 'landcover_wood') {
-    if (type === 'fill') paint['fill-color'] = palette.park;
+    if (type === 'fill') {
+      paint['fill-color'] = palette.park;
+      // OpenFreeMap dark ships `"fill-pattern": "wood-pattern"` on
+      // landcover_wood while its sprite omits the image, which makes
+      // MapLibre log a load error and skip the whole layer. Our repaint is
+      // flat Google-like color anyway — drop the pattern.
+      delete paint['fill-pattern'];
+    }
     return;
   }
   if (id === 'landuse_residential') {

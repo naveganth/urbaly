@@ -463,6 +463,12 @@ export function MapSearchCard({
   className?: string;
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  // "Buscar no mapa..." overflows the mobile search row at 16px (the size
+  // that stops iOS zoom-on-focus), so phones get the shorter hint.
+  const [isMobile, setIsMobile] = React.useState(false);
+  React.useEffect(() => {
+    setIsMobile(!window.matchMedia('(min-width: 768px)').matches);
+  }, []);
 
   return (
     <div
@@ -484,7 +490,7 @@ export function MapSearchCard({
           ref={inputRef}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={isLoading ? 'Carregando…' : 'Buscar no mapa...'}
+          placeholder={isLoading ? 'Carregando…' : isMobile ? 'Buscar...' : 'Buscar no mapa...'}
           aria-label="Buscar ocorrências"
           aria-busy={isLoading}
           className="h-10 w-full rounded-full bg-transparent pl-3 pr-8 font-sans text-base tracking-[-0.01em] outline-none placeholder:text-muted-foreground md:text-sm"
