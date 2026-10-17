@@ -10,15 +10,16 @@ import { REPORT_IMAGE_CDN } from '@/components/map/types';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Urbaly — Monitoramento Urbano do Amapá',
+    default: 'Urbaly - Monitoramento Urbano do Amapá',
     template: '%s | Urbaly',
   },
   description:
     'Plataforma colaborativa de monitoramento e análise de dados urbanos para o estado do Amapá. Acompanhe ocorrências e reporte problemas na sua rua.',
   applicationName: 'Urbaly',
-  // iOS standalone: content stays below the status bar until the safe-area
-  // pass flips this to 'black-translucent' (with env(safe-area-inset-top)
-  // padding on the navbar).
+  // iOS standalone: 'default' keeps the status bar adaptive (readable over
+  // our white light theme). 'black-translucent' would force white status
+  // text and require env(safe-area-inset-top) padding on every header —
+  // rejected on purpose; revisit only if the app goes dark-first.
   appleWebApp: {
     capable: true,
     title: 'Urbaly',
@@ -44,6 +45,9 @@ export const viewport: Viewport = {
   // Required for env(safe-area-inset-*) values to become non-zero on notched
   // devices — the map controls and report wizard already reserve those insets.
   viewportFit: 'cover',
+  // Let the on-screen keyboard resize the layout viewport (Chromium) so the
+  // bottom-docked report wizard and map search stay visible while typing.
+  interactiveWidget: 'resizes-content',
   // In-page browser chrome follows the app background per OS color scheme;
   // color-scheme itself is set at runtime by ThemeProvider.
   themeColor: [

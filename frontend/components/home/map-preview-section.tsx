@@ -26,7 +26,7 @@ export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProp
         transition={shouldReduceMotion ? { duration: 0 } : { layout: { duration: 0.5, ease: [0.32, 0.72, 0, 1] } }}
       >
         {isMapOpen ? (
-          <div className="w-full min-h-full p-4 sm:p-6 md:p-8 flex flex-col">
+          <div className="w-full min-h-full pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] flex flex-col sm:p-6 md:p-8">
             <div className="max-w-7xl w-full mx-auto flex flex-col gap-4 flex-1">
               <div className="flex items-center justify-between gap-4 pb-2 border-b border-border">
                 <div>
@@ -39,7 +39,7 @@ export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProp
                   variant="outline"
                   size="icon"
                   aria-label="Fechar mapa"
-                  className="bg-background/80 backdrop-blur-sm shrink-0"
+                  className="size-11 shrink-0 rounded-full bg-background/80 backdrop-blur-sm"
                   onClick={onToggle}
                 >
                   <X />
@@ -65,7 +65,7 @@ export function MapPreviewSection({ isMapOpen, onToggle }: MapPreviewSectionProp
               <Button
                 variant="default"
                 size="sm"
-                className="mt-2 gap-1.5"
+                className="mt-2 min-h-11 gap-1.5"
                 onClick={onToggle}
               >
                 <Maximize2 className="size-3.5" />

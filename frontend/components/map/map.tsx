@@ -1632,7 +1632,7 @@ export default function Map() {
           <div
             role="status"
             aria-live="polite"
-            className="absolute inset-x-3 top-3 z-30 flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 backdrop-blur-md md:left-4 dark:text-amber-100"
+            className="absolute left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-3 z-30 flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 backdrop-blur-md md:left-4 dark:text-amber-100"
           >
             <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="min-w-0 flex-1">
@@ -1661,7 +1661,7 @@ export default function Map() {
           )}
         >
           {/* Floating Maps chrome: search card only (filters live in the card) */}
-          <div className="absolute inset-x-3 top-3 z-20 md:inset-x-auto md:left-4 md:top-4 md:w-[440px]">
+          <div className="absolute left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-3 z-20 md:inset-x-auto md:left-4 md:top-4 md:w-[440px]">
             <MapSearchCard
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -1697,7 +1697,7 @@ export default function Map() {
               role="dialog"
               aria-live="polite"
               aria-label="Usar minha localização"
-              className="absolute inset-x-3 top-[68px] z-20 mx-auto flex max-w-md flex-col gap-2.5 rounded-2xl border border-primary/30 bg-background/95 px-4 py-3.5 backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
+              className="absolute left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-[68px] z-20 mx-auto flex max-w-md flex-col gap-2.5 rounded-2xl border border-primary/30 bg-background/95 px-4 py-3.5 backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
             >
               <div className="flex items-start gap-2.5">
                 <Crosshair aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -1746,7 +1746,7 @@ export default function Map() {
           {geoHint && !showGeoPrompt && (
             <div
               role="status"
-              className="absolute inset-x-3 top-[68px] z-20 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-border/70 bg-background/95 px-3 py-2.5 text-xs font-medium text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
+              className="absolute left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-[68px] z-20 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-border/70 bg-background/95 px-3 py-2.5 text-xs font-medium text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none md:left-4 md:right-auto md:top-[76px] md:mx-0 dark:bg-zinc-900/95"
             >
               <Crosshair aria-hidden="true" className="size-4 shrink-0 text-primary" />
               <span className="min-w-0 flex-1">{geoHint}</span>
@@ -1801,7 +1801,7 @@ export default function Map() {
           {/* Placement Mode Top Overlay Banner — sits below pills.
               Hidden once the form card takes over (the point is already picked). */}
           {isPlacementMode && !isSheetOpen && (
-            <div role="status" className="absolute left-3 right-3 top-[76px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center font-sans text-xs font-semibold text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[84px] dark:bg-zinc-900/95">
+            <div role="status" className="absolute left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] top-[76px] z-10 mx-auto flex max-w-xl items-center justify-center gap-2.5 rounded-2xl border border-primary/35 bg-background/95 px-3 py-2.5 text-center font-sans text-xs font-semibold text-foreground backdrop-blur-md animate-in fade-in slide-in-from-top-3 motion-reduce:animate-none sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:px-4 md:top-[84px] dark:bg-zinc-900/95">
               <span aria-hidden="true" className="flex size-2 rounded-full bg-primary animate-ping motion-reduce:animate-none" />
               <Crosshair aria-hidden="true" className="size-4 text-primary" />
               <span>Modo de marcação ativo. Clique no mapa para indicar o local.</span>
@@ -1818,7 +1818,7 @@ export default function Map() {
 
           {/* Bottom-left column anchored at the bottom edge: Layers button
               above the report-count legend with a structural gap */}
-          <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 z-10 flex flex-col items-start gap-3 md:left-4">
+          <div className="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-[max(0.75rem,env(safe-area-inset-left))] z-10 flex flex-col items-start gap-3 md:left-4">
             <MapBasemapButton
               options={basemapOptions}
               value={effectiveBasemap}

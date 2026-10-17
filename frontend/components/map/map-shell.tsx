@@ -178,7 +178,7 @@ export function MapNavDrawer({
             <X className="size-5" />
           </button>
         </SheetHeader>
-        <nav aria-label="Menu" className="flex flex-col overflow-y-auto px-2 py-2">
+        <nav aria-label="Menu" className="flex flex-col overflow-y-auto px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           {MAP_NAV_ITEMS.map((item) => {
             const active = isNavActive(pathname, item.href);
             const Icon = item.icon;
@@ -487,7 +487,7 @@ export function MapSearchCard({
           placeholder={isLoading ? 'Carregando…' : 'Buscar no mapa...'}
           aria-label="Buscar ocorrências"
           aria-busy={isLoading}
-          className="h-10 w-full rounded-full bg-transparent pl-3 pr-8 font-sans text-sm tracking-[-0.01em] outline-none placeholder:text-muted-foreground"
+          className="h-10 w-full rounded-full bg-transparent pl-3 pr-8 font-sans text-base tracking-[-0.01em] outline-none placeholder:text-muted-foreground md:text-sm"
         />
         {searchQuery ? (
           <button

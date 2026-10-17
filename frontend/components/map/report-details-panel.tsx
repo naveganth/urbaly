@@ -53,7 +53,7 @@ const STATUS_CONFIG: Record<
 };
 
 const PANEL_POSITION =
-  'absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] md:inset-x-auto md:left-4 md:top-[84px] md:bottom-6 md:w-[400px] md:max-h-none';
+  'absolute z-10 inset-x-0 bottom-0 max-h-[72dvh] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:inset-x-auto md:left-4 md:top-[84px] md:bottom-6 md:w-[400px] md:max-h-none';
 
 function PanelShell({
   children,
@@ -361,7 +361,7 @@ export function ReportDetailsPanel({ report, images, onClose, onUpvote, onPrev, 
       )}
 
       {/* Scrollable body */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-5">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:px-5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className={cn('rounded-md p-1', categoryInfo.bgLight, categoryInfo.color)}>

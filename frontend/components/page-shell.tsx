@@ -10,7 +10,7 @@ interface PageShellProps {
 
 export function PageShell({ children, className }: PageShellProps) {
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background">
+    <div className="flex min-h-screen w-full flex-col bg-background pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] supports-[min-height:100dvh]:min-h-dvh">
       <Navbar />
       <main className={cn("page-transition flex-1 w-full", className)}>
         {children}

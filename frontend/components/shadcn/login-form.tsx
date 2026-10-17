@@ -25,6 +25,23 @@ function LoginFormInner({
   const { status, error, loginWithGoogle } = useAuth()
   const [pending, setPending] = React.useState(false)
   const [localError, setLocalError] = React.useState<string | null>(null)
+  const googleSlotRef = React.useRef<HTMLDivElement>(null)
+  const [googleButtonWidth, setGoogleButtonWidth] = React.useState(320)
+
+  // GIS renders a fixed-px iframe; measure the slot so the button fits
+  // narrow phones (viewport minus page padding) instead of clipping.
+  React.useEffect(() => {
+    const slot = googleSlotRef.current
+    if (!slot) return
+    const measure = () => {
+      const width = Math.floor(slot.getBoundingClientRect().width)
+      if (width > 0) setGoogleButtonWidth(Math.min(320, Math.max(200, width)))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(slot)
+    return () => observer.disconnect()
+  }, [])
 
   const isBusy = pending || status === "loading"
   const displayError = localError ?? error
@@ -78,11 +95,11 @@ function LoginFormInner({
           </div>
           <Field>
             {hasClientId ? (
-              <div className="flex w-full justify-center">
+              <div ref={googleSlotRef} className="flex w-full justify-center">
                 <GoogleLogin
                   text="continue_with"
                   shape="rectangular"
-                  width="320"
+                  width={String(googleButtonWidth)}
                   onSuccess={(res) => void handleSuccess(res.credential)}
                   onError={() =>
                     setLocalError("Não foi possível conectar ao Google.")

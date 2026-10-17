@@ -72,7 +72,7 @@ export function Navbar({
     <header
       data-navbar={intent}
       className={cn(
-        "relative isolate w-full",
+        "relative isolate w-full pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
         isInset
           ? "bg-sidebar md:px-2 dark:bg-background"
           : "border-b border-border bg-background",
@@ -154,7 +154,7 @@ export function Navbar({
               <SheetHeader>
                 <SheetTitle>Navegação</SheetTitle>
               </SheetHeader>
-              <nav className="flex flex-col px-4" aria-label="Menu móvel">
+              <nav className="flex flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]" aria-label="Menu móvel">
                 {NAV_LINKS.map((link) => {
                   const isActive = isLinkActive(link.href, link.label)
 
@@ -187,6 +187,17 @@ export function Navbar({
             </SheetContent>
           </Sheet>
 
+          {status !== "loading" && status !== "authenticated" && (
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={resolvedTheme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+              className="flex size-11 shrink-0 cursor-pointer touch-manipulation items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </button>
+          )}
+
           {status === "loading" ? (
             <div
               aria-hidden
@@ -198,7 +209,7 @@ export function Navbar({
               size="sm"
               render={<Link href="/login" />}
               nativeButton={false}
-              className="min-h-9 touch-manipulation px-4 text-sm"
+              className="min-h-11 touch-manipulation px-4 text-sm"
             >
               Entrar
             </Button>

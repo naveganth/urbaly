@@ -48,7 +48,7 @@ const STEPS = [
 // New docking: same map-overlay idea, own measurements — wider desktop card,
 // taller mobile sheet, distinct radius + ring so it never reads as the old one.
 const WIZARD_POSITION =
-  'absolute z-30 inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] max-h-[86dvh] md:inset-x-auto md:right-4 md:top-[120px] md:bottom-4 md:w-[420px] md:max-h-none';
+  'absolute z-30 left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] bottom-[calc(0.75rem+env(safe-area-inset-bottom))] max-h-[86dvh] md:inset-x-auto md:right-4 md:top-[120px] md:bottom-4 md:w-[420px] md:max-h-none';
 
 export function ReportWizardSheet({
   isOpen,

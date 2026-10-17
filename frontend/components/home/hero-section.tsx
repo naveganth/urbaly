@@ -24,14 +24,14 @@ export function HeroSection({ onOpenMap }: HeroSectionProps) {
           </p>
         </div>
 
-        <div className="flex w-fit shrink-0 items-center gap-2">
+        <div className="flex flex-wrap w-fit shrink-0 items-center gap-2">
           <a
             href="#como-funciona"
-            className={cn(buttonVariants({ variant: "ghost" }), "w-fit")}
+            className={cn(buttonVariants({ variant: "ghost" }), "min-h-11 w-fit")}
           >
             Como funciona
           </a>
-          <Button className="w-fit" onClick={onOpenMap}>
+          <Button className="min-h-11 w-fit" onClick={onOpenMap}>
             <Maximize2 />
             Abrir mapa
           </Button>

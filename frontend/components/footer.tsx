@@ -63,7 +63,7 @@ export function Footer() {
               Se inscreva no nosso <em>newsletter</em> para receber notícias +
               atualizações referentes ao estado do Amapá!
             </p>
-            <form className="mt-4 flex h-9 items-center border border-border bg-muted/50 pl-3 transition-colors focus-within:border-primary">
+            <form className="mt-4 flex h-11 items-center border border-border bg-muted/50 pl-3 transition-colors focus-within:border-primary">
               <label htmlFor="newsletter-email" className="sr-only">
                 Seu e-mail
               </label>
@@ -72,11 +72,11 @@ export function Footer() {
                 name="email"
                 type="email"
                 placeholder="seuemail@gmail.com"
-                className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0"
+                className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 sm:text-sm"
               />
               <Button
                 type="submit"
-                size="icon-sm"
+                size="icon-lg"
                 variant="ghost"
                 aria-label="Inscrever e-mail"
                 className="mr-0.5 text-primary hover:bg-primary/10 hover:text-primary"
@@ -99,7 +99,7 @@ export function Footer() {
                 key={label}
                 href={href}
                 aria-label={label}
-                className="inline-flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Icon aria-hidden="true" />
               </Link>
